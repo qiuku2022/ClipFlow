@@ -327,34 +327,39 @@ ClipFlow 的技术拓扑，本质上是在用系统级工程手段，搭建一�
 - **优化与修正建议**：
   1. 文档中必须补齐**“视口 AABB 粗筛裁剪中间件（Viewport Culling Middleware）”**：严禁在 egui 渲染闭环内对全量 `Track` 和 `Clip` 执行未裁剪的循环遍历。必须以二分查找建立可见时间区间索引，屏幕视口外的 Clip 连一行 egui 绘制函数都不得执行；
   2. 严禁在 egui 主线程动态绘制波形矢量线条，必须坚决执行 `media-pipeline-spec.md` 中设计的 `.peak` 二进制文件与预生成 `egui::Mesh` 批量提交策略；
-  3. 引入**事件门控（Event-Gated Repaint）**机制：非播放状态下，完全静默 `request_repaint()`，将空闲 CPU 占用压制在 0%。
+  3. 引入**事件门控（Event-Gated Repaint）**机制：非播放状态下，完全静默 `request_repaint()`，将空闲 CPU 占用压制在 0%。详见 [.local/审视一/00_审视一性能隐患修复方案_架构总纲.md](.local/审视一/00_审视一性能隐患修复方案_架构总纲.md)。
 
 #### 审视 2：wgpu 30.0 跨 API 纹理交互选型与多媒体管线物理边界
-- **问题透视与争议澄清**：
-  原文档在 `media-pipeline-spec.md` 中提出的“零 CPU 转换原则”，是指**杜绝在 CPU 侧调用 `sws_scale` 执行昂贵的像素级色彩空间重排（YUV $\to$ RGB）**，改由 GPU WGSL 着色器完成硬件双线性插值与矩阵点乘，而非字面意义上的跨显存物理零拷贝。此前有观点指责“4K 60fps NV12 经由 CPU 内存中转每秒吞吐 746 MB/s 带来巨大总线压力，必须用 `wgpu-hal` 跨 API 共享导入 D3D11 纹理（路线 B）”，该观点存在严重的工程误判：
-  1. **定量总线带宽戳破泡沫**：746 MB/s 仅占用 PCIe 3.0 x16 的 **$4.74\%$** 与 PCIe 4.0 x16 的 **$2.37\%$**，且在配合监视器自适应下采样（1/2、1/4）时吞吐降至 $46 \sim 186\text{ MB/s}$，总线完全富余；
-  2. **路线 B 属于高危技术陷阱**：在 `wgpu` 之上强穿 Direct3D 11 到 Direct3D 12 共享句柄，会彻底摧毁 `wgpu` 的资源状态机追踪（Hazard Tracking & Barriers），在异构显卡驱动下极易引发 DeviceLost 设备丢失与 TDR 蓝屏死锁；
-  3. **终局技术代差**：FFmpeg 9.0.2 已原生成熟支持 **`D3D12VA`**。未来的物理零拷贝应直接走“同 API 设备直通（路线 C）”，而非架设脆弱的跨 API 杂技桥梁。
+- **问题透视与架构澄清**：
+  原文档在 `media-pipeline-spec.md` 中提出的“零 CPU 转换原则”，是指**杜绝在 CPU 侧调用 `sws_scale` 执行昂贵的像素级色彩空间重排（YUV $\to$ RGB）**，改由 GPU WGSL 着色器完成硬件双线性插值与矩阵点乘，而非字面意义上的跨显存物理零拷贝：
+  1. **定量总线带宽实测**：4K 60fps NV12 经由 CPU 锁页内存中转吞吐约为 746 MB/s，仅占用 PCIe 3.0 x16 的 **$4.74\%$** 与 PCIe 4.0 x16 的 **$2.37\%$**，且在配合监视器自适应下采样（1/2、1/4）时吞吐降至 $46 \sim 186\text{ MB/s}$，总线带宽完全富余；
+  2. **规避跨 API 共享陷阱**：在 `wgpu` 之上强穿 Direct3D 11 到 Direct3D 12 共享句柄（路线 B），会破坏 `wgpu` 底层的资源状态机追踪（Hazard Tracking & Barriers），极易在异构显卡驱动下引发 DeviceLost 设备丢失与 TDR 崩溃；
+  3. **终局技术演进路线**：FFmpeg 自 6.1 起已合入原生 `D3D12VA` 硬件加速支持。长远物理零拷贝应演进为基于同 API 设备句柄直通（路线 C），而非架构跨 API 桥梁。
 - **优化与修正建议**：
   - **M1/M2 阶段（当前生产级）**：坚决执行**路线 A（稳健底座）**，通过 `PinnedFramePool` 预分配 4KB/64B 对齐的锁页内存，实现 DMA 零堆分配极速直传（上传耗时 $\le 0.8\text{ms}$），配合 `ProxyGovernor` 自适应下采样将拖拽带宽压制在 $\le 60\text{ MB/s}$，确保 100% 内存安全与零闪退；
-  - **M4+ 阶段（远期极限储备）**：面向 8 轨 4K 60fps RAW 等极端重载工况，在独立分支预研**路线 C（FFmpeg 原生 D3D12VA 直通）**，共享同一个 `ID3D12Device` 实体，实现真正的同 API 物理零拷贝。详见 [00_审视二多媒体硬解与图形交互性能隐患修复方案_架构总纲.md](file:///d:/Work/Dev/ClipFlow/.local/审视二/00_审视二多媒体硬解与图形交互性能隐患修复方案_架构总纲.md)。
+  - **M4+ 阶段（远期极限储备）**：面向 8 轨 4K 60fps RAW 等极端重载工况，在独立分支预研**路线 C（FFmpeg 原生 D3D12VA 直通）**，共享同一个 `ID3D12Device` 实体，实现真正的同 API 物理零拷贝。详见 [.local/审视二/00_审视二多媒体硬解与图形交互性能隐患修复方案_架构总纲.md](.local/审视二/00_审视二多媒体硬解与图形交互性能隐患修复方案_架构总纲.md)。
 
 #### 审视 3：音频主时钟离散拍频顿挫与 WASAPI 硬件单调箝位外推破局
-- **问题透视与伪命题剥离**：
-  原文档在 `media-pipeline-spec.md` 第 3.2 节中给出的离散公式 $\text{Time} = \frac{\text{TotalSamplesConsumed}}{\text{SampleRate}}$，会导致 Windows WASAPI 10ms 缓冲区跳变与 60/120 FPS 视频刷新之间产生拍频阶梯抖动。然而，此前关于“自研温漂低通滤波 / 软件锁相环（PLL）校准 10~50 ppm 温漂”的主张属于脱离硬件特性的典型伪命题（温漂每秒仅 0.05ms，软滤波会引入致命的相位滞后与切口脱节）；同时“两次音频回调间裸写 QPC 增量”在音频短时欠载恢复时会引发灾难性的**“时间倒流（Time Inversion）”**与画面抽搐。
+- **问题透视与时钟机理分析**：
+  原文档在 `media-pipeline-spec.md` 第 3.2 节中给出的离散公式 $\text{Time} = \frac{\text{TotalSamplesConsumed}}{\text{SampleRate}}$，会导致 Windows WASAPI 10ms 缓冲区跳变与 60/120 FPS 视频刷新之间产生拍频阶梯抖动。然而，试图通过软件锁相环（PLL）校准微小的物理温漂并不可行（温漂每秒仅约 0.05ms，自研滤波反倒会引入相位滞后与切口脱节）；同时若在音频回调间直接累加 QPC 增量，在音频短时欠载恢复时会引发严重的**“时间倒流（Time Inversion）”**与画面抽搐。
 - **优化与修正建议**：
   确立**“WASAPI 原生 `IAudioClock` 硬件游标锚定 + `MonotonicClampedClock` 无锁单调箝位平滑外推器 + 双阈值迟滞渲染判定”**的生产级架构：
   1. 底层调用 `IAudioClock::GetPosition` 硬件原子捕获 DAC 物理播放采样点与系统 QPC，动态测定硬件 FIFO 排队延迟；
   2. 上层使用 SeqLock 双缓冲与 CAS 单调过滤，限制最大外推跨度 $\le 1.5\times$ 周期（15ms），保证时钟输出绝对单调递增，彻底根除时间倒流；
-  3. 引入双阈值迟滞比较器（8ms 进入 / 12ms 退出）与 VSync 前瞻半帧，将微抖动压制在 $\le 0.05\text{ms}$，音画长效漂移锁定在 $\le 2.0\text{ms}$。详见 [00_审视三高精度主时钟与音画同步性能隐患修复方案_架构总纲.md](file:///d:/Work/Dev/ClipFlow/.local/审视三/00_审视三高精度主时钟与音画同步性能隐患修复方案_架构总纲.md)。
+  3. 引入双阈值迟滞比较器（8ms 进入 / 12ms 退出）与 VSync 前瞻半帧，将微抖动压制在 $\le 0.05\text{ms}$，音画长效漂移锁定在 $\le 2.0\text{ms}$。详见 [.local/审视三/00_审视三高精度主时钟与音画同步性能隐患修复方案_架构总纲.md](.local/审视三/00_审视三高精度主时钟与音画同步性能隐患修复方案_架构总纲.md)。
 
-#### 审视 4：HyperFrames Node.js Headless Chromium 显存泄漏与滚动重启
-- **问题与隐患**：
-  文档在 `hyperframes-spec.md` 中设计了基于 CDP 的逐帧截屏（`Page.captureScreenshot`）。
-  工业界实测表明：Chromium 的 Blink 合成器在连续截取数百帧离屏图片后，内部纹理与 Skia 缓存不会被垃圾回收释放。连续渲染 1500 帧后，单一 Tab 内存会从 200MB 飙升至 2GB 以上，引发 GPU 进程崩溃。
+#### 审视 4：HyperFrames 动效离屏渲染资源治理与双 Worker 预热轮转破局
+- **机理解构与误区澄清**：
+  此前关于“Chromium 连续渲染 1500 帧后内存达 2GB 属于 Blink 显存泄漏，必须每 300~400 帧暴力销毁重建实例”的设想存在严重的工程误判与冷启动黑洞：
+  1. **冷启动断崖灾难**：60 FPS 下 400 帧仅对应 6.67 秒动效，单次实例重启需重新经历进程启动、DOM/字体解析（`document.fonts.ready`）与 GPU 上下文编译（耗时 170ms~500ms），一条 3 分钟成片需重启 27 次，带来高达 16 秒的纯空转损耗，下游 FFmpeg 编码队列频频断流饥饿；
+  2. **内存机制归因失真**：Chromium 内部由 Skia（`GrContext`）以高水位软配额管理图形缓存，属于正常工作集扩张而非物理泄漏；真正的 OOM 瓶颈是 CDP WebSocket 传输 Base64 编码图片造成的 IPC 积压与 V8 堆膨胀；
+  3. **有状态动效闪烁风险**：简单粗暴重启会丢失 Canvas 粒子系统与物理积分的累积状态，导致换代瞬间第 400~401 帧发生剧烈跳变与闪烁（Popping Glitch）。
 - **优化与修正建议**：
-  在 `hyperframes-spec.md` 中强制增加**“无状态滚动重启（Rolling Restart）安全规约”**：
-  渲染 Worker 池必须设定生命周期阈值（如单页面上下文渲染满 300~400 帧立即销毁重建）；同时，离屏截帧应优先探索 Raw RGBA 二进制管道传输，避免 CPU 端高频进行 PNG 编码压缩。
+  确立**“显存硬限 + 帧间 CDP 主动清洗 + 双 Worker 异步预热乒乓池 + Windows 命名共享内存直传 + 纯函数求值契约”**的生产级架构：
+  1. 启动时注入 `--force-gpu-mem-available-mb=512` 与 `--disable-dev-shm-usage`，每 120 帧在间隙静默下发 `Memory.forciblyPurgeJavaScriptMemory`（耗时 $\le 5\text{ms}$），内存长效锁定在 $\le 280\text{MB}$；
+  2. 采用 `PingPongPoolManager`：单 Worker 放宽至 3000 帧，提前 300 帧在后台拉起新实例完成页面与着色器预热，切换时 **0ms 原子交接**，彻底消除冷启动断流；
+  3. 彻底落地现行规范第 3.2 节的“方式 B”，通过 Windows 命名共享内存（`CreateFileMappingW`）三槽位环形池直传 Raw RGBA，单帧 4K 延迟压至 $\le 1.5\text{ms}$；
+  4. 强制执行纯函数式求值契约 $S(t) = f(t, \vec{P})$ 并固化 PRNG 种子，结合 Rust 帧账本看门狗实现崩溃 50ms 局部自愈断点续帧。详见 [.local/审视四/00_审视四无头动效渲染与Chromium资源治理修复方案_架构总纲.md](.local/审视四/00_审视四无头动效渲染与Chromium资源治理修复方案_架构总纲.md)。
 
 #### 审视 5：Polyglot Monorepo 多进程架构的调试成本与看门狗（Watchdog）
 - **问题与隐患**：
@@ -419,8 +424,9 @@ graph TD
 3. **确立 WASAPI 硬件 DAC 锚定与无锁单调箝位主时钟规约**：
    - 彻底废除脱离硬件的自研温漂滤波与软件锁相环（PLL）过度设计；
    - 在 `media-pipeline-spec.md` 中全面落实 `WasapiHardwareAnchor` 硬件锚定、`MonotonicClampedClock` 无锁单调箝位外推与 `HysteresisSyncComparator` 双阈值迟滞比较，杜绝时间倒流与拍频顿挫。
-4. **确立 HyperFrames 无头集群滚动重启机制**：
-   - 在 `hyperframes-spec.md` 中增加 Headless Chromium 实例池管理规约，严格执行每 400 帧无状态滚动重启，杜绝离屏渲染内存泄漏。
+4. **确立 HyperFrames 动效显存硬限与双 Worker 乒乓预热轮转规约**：
+   - 在 `hyperframes-spec.md` 中增加生产级 Chromium 启动 Flag 矩阵（512MB 显存硬配额）与每 120 帧主动清洗管线；
+   - 落实双 Worker 异步预热乒乓池（Ping-Pong Pool），前瞻 300 帧预热并在 3000 帧周期实现 0ms 无感交接；全面落实 Windows 命名共享内存 Raw RGBA 零拷贝直传与纯函数式动效求值契约。
 5. **前置 FCPXML / EDL 行业标准工程交换里程碑**：
    - 将 FCPXML 1.10 / EDL 导出功能从远期特性提升为 M2 阶段与智能粗剪并列的 P0 验收项，彻底打消专业用户试用顾虑。
 

@@ -76,8 +76,8 @@ flowchart TD
 | :--- | :--- | :--- |
 | **`clipflow-common`** | `serde`, `uuid`, `thiserror` | 亚毫秒 `RationalTime`、`TimeRange`、SMPTE 时间码、系统统一 `Result<T, ClipFlowError>`。绝不依赖渲染和媒体库。 |
 | **`clipflow-timeline`**| `clipflow-common`, `zstd` | `Project`, `Sequence`, `Track`, `Clip`, `Keyframe` 数据模型；`TimelineCommand` 命令栈（Undo/Redo）；`.clipflow` 序列化与反序列化。纯数据与状态机，无 GUI 依赖。 |
-| **`clipflow-media`** | `ffmpeg-sys-next` (9.0.2), `wgpu` 30.0, `cpal` | 视频硬解（D3D11VA）、锁页环形帧池（`PinnedFramePool`）、NV12 双平面极速上传、WGSL 全色域色彩矩阵着色器、监视器自适应下采样（`ProxyGovernor`）、WASAPI 硬件 DAC 时钟锚定、`MonotonicClampedClock` 无锁单调箝位外推主时钟、双阈值迟滞渲染调度（`HysteresisSyncComparator`）、波形峰值文件 (`.peak`) 生成与多媒体三级容灾看门狗。 |
-| **`clipflow-ipc`** | `tokio`, `serde_json`, `interprocess` | 管理 Python (`uv`) 和 Node.js 子进程启动、保活、心跳检测与 Windows 命名管道/标准流异步 JSON-RPC 调度。 |
+| **`clipflow-media`** | `ffmpeg-sys-next` (9.0.2), `wgpu` 30.0, `cpal`, `windows` | 视频硬解（D3D11VA）、锁页环形帧池（`PinnedFramePool`）、NV12 双平面极速上传、WGSL 全色域色彩矩阵着色器、监视器自适应下采样（`ProxyGovernor`）、WASAPI 硬件 DAC 时钟锚定、`MonotonicClampedClock` 无锁单调箝位外推主时钟、双阈值迟滞渲染调度（`HysteresisSyncComparator`）、波形峰值文件 (`.peak`) 生成、Windows 命名共享内存 Raw RGBA 消费器（`SharedMemoryConsumer`）、动效帧完成账本（`FrameLedger`）与多媒体三级容灾看门狗。 |
+| **`clipflow-ipc`** | `tokio`, `serde_json`, `interprocess`, `windows` | 管理 Python (`uv`) 和 Node.js 子进程启动、保活、心跳检测、Windows 命名管道/标准流异步 JSON-RPC 调度与 HyperFrames 动效进程容灾看门狗（`MotionWatchdog`）。 |
 | **`clipflow-ui`** | `egui` 0.36, `egui_wgpu`, `winit` | 达芬奇底部 6 大分页 Dock 栏切换、PR 剪辑四区分屏、全局公用时间线视图渲染、关键帧曲线编辑器、工控绿视觉映射。 |
 | **`clipflow-app`** | `eframe` 0.36, `tracing` | 应用程序 `main()` 入口、跨模块依赖注入、全局状态根 (`AppState`) 托管、系统托盘与异常捕获。 |
 
@@ -147,9 +147,15 @@ timeline
 
 - **目标**：实现 Web 技术栈动态图层叠加与成片母带高质量输出。
 - **核对项与验收标准**：
-  1. **动效逐帧渲染**：Node.js 24 无头浏览器虚拟时钟步进正常，生成带 Alpha 通道的 RGBA 帧，在【动画】页面支持实时 60fps 预览；
-  2. **多层 GPU 合成**：时间轴 FX 轨道挂载科技角标，节目监视器中文字与视频背景融合完美；
-  3. **母带硬件导出**：在【导出】页面配置 1080p/4K 预设，FFmpeg 调用 NVENC (H.264/HEVC) 进行 GPU 编码，导出成片音画同步、色彩无偏差。
+  1. **动效离屏逐帧渲染与共享内存直传**：
+     - Node.js 24 无头 Chromium 启动参数显存硬限（512MB）与 120 帧轻量清洗机制生效，连续渲染 3000 帧内存稳定锁定在 $\le 300\text{MB}$；
+     - 基于 Win32 命名共享内存映射 Raw RGBA 像素，4K 单帧传输延迟严格 $\le 1.5\text{ms}$，P99 延迟 $\le 2.5\text{ms}$，零堆分配、零 GC 抖动；
+     - 双 Worker 异步预热乒乓池（`PingPongPoolManager`）无缝交接，交接帧顿挫 $\le 0.5\text{ms}$，消除冷启动流水线断崖；纯函数求值契约保障零状态闪烁（Pixel Diff 严格为 0）；
+  2. **多层 GPU 合成与看门狗容灾**：
+     - 时间轴 FX 轨道挂载科技角标，节目监视器中文字与视频背景融合完美；
+     - 模拟 Chromium 进程意外退出（`SIGKILL`），Rust 宿主看门狗在 $100\text{ms}$ 内捕获退出码、拉起备用 Worker 并从 `FrameLedger` 断点帧接续生产，母带导出任务无感完成且成片无任何坏帧；
+  3. **母带硬件导出**：
+     - 在【导出】页面配置 1080p/4K 预设，FFmpeg 调用 NVENC (H.264/HEVC) 进行 GPU 编码，导出成片音画严格同步、色彩无偏差、导出帧连续无丢帧。
 
 ---
 
