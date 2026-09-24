@@ -34,7 +34,4 @@
 | 12 | [代码仓库架构与开发路线图 (codebase-and-roadmap.md)](file:///d:/Work/Dev/ClipFlow/docs/codebase-and-roadmap.md) | Cargo Workspace 多 Crate 划分、依赖拓扑、M0~M4 渐进式开发里程碑与核对验收标准 | 新增完成 (P2) |
 | 13 | [辅助工作流页面规格 (workflow-pages-spec.md)](file:///d:/Work/Dev/ClipFlow/docs/workflow-pages-spec.md) | 达芬奇 Dock 栏其余页面深度规格：【声音】混音台与 AI 降噪、【图片】封面制作、【导出】母带渲染 | 新增完成 (P2) |
 | 14 | [性能基准与质量验收规范 (qa-and-benchmarks.md)](file:///d:/Work/Dev/ClipFlow/docs/qa-and-benchmarks.md) | 音画同步误差阈值 (≤16.6ms)、60FPS渲染、ASR/粗剪准确率红线与自动化测试套件 | 新增完成 (P3) |
-
-
-
-
+| 15 | [开发文档合理性评估：横纵分析报告 (ClipFlow开发文档合理性横纵分析报告.md)](file:///d:/Work/Dev/ClipFlow/docs/ClipFlow%E5%BC%80%E5%8F%91%E6%96%87%E6%A1%A3%E5%90%88%E7%90%86%E6%80%A7%E6%A8%AA%E7%BA%B5%E5%88%86%E6%9E%90%E6%8A%A5%E5%91%8A.md) | 基于卡兹克横纵分析法，对现行 docs 系统架构选型、物理规律边界与生产级合理性的深度审视 | 现行权威评估 |
