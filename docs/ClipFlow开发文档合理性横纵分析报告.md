@@ -221,7 +221,7 @@ graph TD
   3. **指标定义严谨**：[qa-and-benchmarks.md](file:///d:/Work/Dev/ClipFlow/docs/qa-and-benchmarks.md) 建立了覆盖 50 项 KPI 的可测 SLA 红线表与针对性压测场景，拒绝模糊推断；
   4. **演进梯度明确**：[codebase-and-roadmap.md](file:///d:/Work/Dev/ClipFlow/docs/codebase-and-roadmap.md) 对 M0~M4 里程碑划分边界清晰，职责单向无环，各阶段验收标准具有极高的可操作性。
 - **开发放行判定**：
-  **现行 `docs/` 规范系统无须再做结构性大改，已完全具备作为单一事实来源（SSOT）启动正式编码开发的条件。建议工程团队即刻进入 Milestone 0 (M0) 阶段，拉起 Cargo Workspace 与 Windows JobGuard 基础通信骨架！**
+  **现行 `docs/` 规范系统无须再做结构性大改，且前期暴露的四处跨模块断层（`float` 阻抗、动效输出冲突、时间线几何跳变、混音台字段缺失）已在 [remediation_plan](file:///d:/Work/Dev/ClipFlow/.local/remediation_plan/00_ClipFlow%E6%A0%B8%E5%BF%83%E6%9E%B6%E6%9E%84%E7%9F%9B%E7%9B%BE%E4%BF%AE%E5%A4%8D%E6%96%B9%E6%A1%88_%E6%9E%B6%E6%9E%84%E6%80%BB%E7%BA%B2.md) 中完成系统性工程闭环并全部反哺同步至对应生产文档，完全具备作为单一事实来源（SSOT）启动正式编码开发的条件。建议工程团队即刻进入 Milestone 0 (M0) 阶段，拉起 Cargo Workspace 与 Windows JobGuard 基础通信骨架！**
 
 ---
 

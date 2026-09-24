@@ -127,6 +127,84 @@ impl SmpteTimecode {
 }
 ```
 
+### 1.4 Agent 防腐网关与帧网格硬吸附 (`AgentTimelineAcl`)
+
+大模型 (LLM) 与外部 Agent 工具通过自然语言或 JSON 交互时，产出的时间戳天然为十进制浮点秒数（`f64`）。为杜绝浮点数侵入时间轴内部状态，系统设立显式防腐层：外部浮点秒数在穿透至 `TimelineCommand` 之前，必须由 `AgentTimelineAcl` 强制量化并吸附至最近的物理帧分界点，并消除切片微小缝隙引发的 1 帧黑屏空洞。
+
+```rust
+/// Agent 外部通信使用的原始请求结构 (仅用于 IPC / JSON 序列化)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentCutRequest {
+    pub start_time_seconds: f64,
+    pub end_time_seconds: f64,
+    pub reason: String,
+}
+
+/// Agent 时间轴防腐网关
+pub struct AgentTimelineAcl;
+
+impl AgentTimelineAcl {
+    /// 将外部浮点秒数严格量化吸附至序列当前帧网格分界点
+    #[inline]
+    pub fn seconds_to_snapped_time(
+        seconds: f64,
+        timebase: u32,
+        fps_denominator: u32,
+    ) -> RationalTime {
+        if seconds <= 0.0 {
+            return RationalTime::new(0, timebase);
+        }
+        let frame_duration_s = fps_denominator as f64 / timebase as f64;
+        let frame_index = (seconds / frame_duration_s).round() as i64;
+        let snapped_value = frame_index * (fps_denominator as i64);
+        RationalTime::new(snapped_value, timebase)
+    }
+
+    /// 对 Agent 提交的切除请求执行合法性校验、帧吸附与拓扑缝合
+    /// 相邻切片间距 <= 1 帧微差时自动无缝对齐，保证切片空洞坏帧率严格为 0
+    pub fn sanitize_and_stitch_cuts(
+        raw_cuts: &[AgentCutRequest],
+        source_duration: RationalTime,
+        timebase: u32,
+        fps_denominator: u32,
+    ) -> Vec<TimeRange> {
+        let mut valid_ranges = Vec::with_capacity(raw_cuts.len());
+        let max_ticks = source_duration.rescaled_to(timebase).value;
+
+        for cut in raw_cuts {
+            let start = Self::seconds_to_snapped_time(cut.start_time_seconds, timebase, fps_denominator);
+            let end = Self::seconds_to_snapped_time(cut.end_time_seconds, timebase, fps_denominator);
+
+            let clamped_start = start.value.clamp(0, max_ticks);
+            let clamped_end = end.value.clamp(clamped_start, max_ticks);
+
+            if clamped_end > clamped_start {
+                let duration_ticks = clamped_end - clamped_start;
+                valid_ranges.push(TimeRange::new(
+                    RationalTime::new(clamped_start, timebase),
+                    RationalTime::new(duration_ticks, timebase),
+                ));
+            }
+        }
+
+        let frame_ticks = fps_denominator as i64;
+        let mut stitched_ranges: Vec<TimeRange> = Vec::with_capacity(valid_ranges.len());
+
+        for range in valid_ranges {
+            if let Some(last) = stitched_ranges.last_mut() {
+                let gap = range.start.value - last.end_exclusive().value;
+                if gap > 0 && gap <= frame_ticks {
+                    last.duration = RationalTime::new(last.duration.value + gap, timebase);
+                }
+            }
+            stitched_ranges.push(range);
+        }
+
+        stitched_ranges
+    }
+}
+```
+
 ---
 
 ## 2. 核心数据模型 (Core Domain Models)
@@ -304,7 +382,7 @@ impl<T: Copy + Interpolate> Animatable<T> {
 }
 ```
 
-### 2.4 轨道 (`Track`) 与多轨容器
+### 2.4 轨道 (`Track`)、通道条与序列总线容器
 
 ```rust
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -315,17 +393,98 @@ pub enum TrackKind {
     HyperFrames,
 }
 
+/// 4 段参量均衡器单频段配置 (4-Band Parametric EQ Band)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ParametricEqBand {
+    /// 中心频率 (20.0 Hz ~ 20000.0 Hz)
+    pub freq_hz: f32,
+    /// 增益 (-24.0 dB ~ +24.0 dB, 0.0 为平直)
+    pub gain_db: f32,
+    /// 品质因数 Q (0.1 ~ 10.0, 默认 0.707 对应 Butterworth 响应)
+    pub q: f32,
+    /// 是否激活该频段
+    pub enabled: bool,
+}
+
+/// 轨道级音频通道条属性 (Track-Level Audio Strip)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrackAudioProperties {
+    /// 轨道主推子音量 (-60.0 dB ~ +12.0 dB, 默认 0.0 dB)
+    pub fader_volume_db: f32,
+    /// 轨道立体声声相 (-1.0 极左, 0.0 居中, 1.0 极右)
+    pub pan: f32,
+    /// AI 口播人声降噪量 (0.0 ~ 1.0)
+    pub ai_denoise_amount: f32,
+    /// 动态压缩器阈值 (单位 dB, 默认 0.0 为不触发压缩)
+    pub compressor_threshold_db: f32,
+    /// 4 段专业参量均衡器: [0: 低切, 1: 低中频, 2: 高中频, 3: 高架空气感]
+    pub eq_bands: [ParametricEqBand; 4],
+}
+
+impl Default for TrackAudioProperties {
+    fn default() -> Self {
+        Self {
+            fader_volume_db: 0.0,
+            pan: 0.0,
+            ai_denoise_amount: 0.0,
+            compressor_threshold_db: 0.0,
+            eq_bands: [
+                ParametricEqBand { freq_hz: 80.0, gain_db: 0.0, q: 0.707, enabled: true },
+                ParametricEqBand { freq_hz: 500.0, gain_db: 0.0, q: 1.0, enabled: false },
+                ParametricEqBand { freq_hz: 3000.0, gain_db: 0.0, q: 1.0, enabled: false },
+                ParametricEqBand { freq_hz: 10000.0, gain_db: 0.0, q: 0.707, enabled: false },
+            ],
+        }
+    }
+}
+
+/// 序列级主输出总线 (Master Bus)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MasterBusProperties {
+    /// 主输出总推子 (默认 0.0 dB)
+    pub master_fader_db: f32,
+    /// 广播标称响度目标 (默认 -14.0 LUFS)
+    pub target_lufs: f32,
+    /// 砖墙母带限制器门限 (默认 -1.0 dBFS True Peak)
+    pub limiter_ceiling_db: f32,
+}
+
+impl Default for MasterBusProperties {
+    fn default() -> Self {
+        Self {
+            master_fader_db: 0.0,
+            target_lufs: -14.0,
+            limiter_ceiling_db: -1.0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Track {
     pub id: Uuid,
-    pub name: String, // 如 "V1", "A1", "C1 (字幕)", "FX1"
+    pub name: String, // 如 "V1", "A1 (口播)", "FX1"
     pub kind: TrackKind,
     pub mute: bool,
     pub solo: bool,
     pub locked: bool,
     pub visible: bool,
+    /// 当 kind == TrackKind::Audio 时强持有的通道条属性
+    pub audio_props: Option<TrackAudioProperties>,
     /// 按在时间轴上的 timeline_range.start 升序排列的片段列表
     pub clips: Vec<Clip>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Sequence {
+    pub id: Uuid,
+    pub name: String,
+    pub timebase: u32,
+    pub fps_denominator: u32,
+    pub playhead: RationalTime,
+    pub work_area: Option<TimeRange>,
+    pub tracks: Vec<Track>,
+    /// 序列级主输出总线控制
+    pub master_bus: MasterBusProperties,
 }
 ```
 

@@ -107,14 +107,25 @@
 
 ---
 
-## 3. Rust 与 HyperFrames 动效渲染协同规范
+## 3. Rust 与 HyperFrames 动效渲染协同规范 (Dual-Mode Motion Protocol)
 
-### 3.1 动效任务下发与离屏渲染
-Rust 调度器生成 HTML/CSS 动画描述文件后，向 HyperFrames 触发渲染：
+系统确立**“在线动态流式合成为主、按需离线烘焙为辅”**的双模调度架构（详见 [02_HyperFrames双模动效流式直传与离线烘焙规范.md](file:///d:/Work/Dev/ClipFlow/.local/remediation_plan/02_HyperFrames%E5%8F%8C%E6%A8%A1%E5%8A%A8%E6%95%88%E6%B5%81%E5%BC%8F%E7%9B%B4%E4%BC%A0%E4%B8%8E%E7%A6%BB%E7%BA%BF%E7%83%98%E7%84%99%E8%A7%84%E8%8C%83.md)）：
 
+### 3.1 模式 A（默认）：在线动态流式合成 (`StreamingSharedMemory`)
+* **适用场景**：日常时间轴交互编辑、实时走带预览、以及 ClipFlow 内部母带直接导出。
+* **数据信道**：通过命名管道派发渲染帧指令后，Node 双 Worker（`PingPongPoolManager`）将逐帧求值生成的 Raw RGBA 像素直接写入 Win32 命名共享内存（`CreateFileMappingW` 三槽位环形池），由 Rust 端 `SharedMemConsumer` 在 **$\le 1.5\text{ms}$** 内完成映射并直传 GPU `wgpu 30.0` 纹理。
+* **时间轴形态**：时间轴挂载原生 `TrackKind::HyperFrames` 动效轨，片段直接保存 JSON 模板参数，**零磁盘 IO、无须预生成任何视频文件**，支持创作者随时双击修改字幕文本并毫秒级无感热重载。
+
+### 3.2 模式 B（按需）：离线无损视频烘焙 (`OfflineBakeFile`)
+* **适用场景**：
+  1. 低配硬件发生性能卡顿，用户主动在时间轴右键点击“烘焙此动效为视频以节省性能”；
+  2. 准备导出 Apple FCP7 XML / EDL 送入 Premiere Pro 或 DaVinci Resolve 时，由 `ConformInspector` 自动触发的格式对齐转换。
+* **IPC 下发协议**：
 ```json
 {
+  "task_id": "7b1f6d90-3482-4d2a-8d82-9f37213b1a20",
   "template_id": "lower_third_minimal",
+  "mode": "OfflineBakeFile",
   "props": {
     "title": "ClipFlow 导演级剪辑 Agent",
     "subtitle": "自动化口播剪辑与动效渲染",
@@ -123,14 +134,14 @@ Rust 调度器生成 HTML/CSS 动画描述文件后，向 HyperFrames 触发渲�
     "width": 1920,
     "height": 1080
   },
-  "output_path": "D:/Cache/Render/anim_001.mov",
-  "output_codec": "prores_ks",
-  "pix_fmt": "yuva444p10le"
+  "bake_config": {
+    "output_path": "D:/Cache/Render/anim_001.mov",
+    "output_codec": "prores_ks",
+    "pix_fmt": "yuva444p10le"
+  }
 }
 ```
-
-### 3.2 渲染结果上架时间轴
-HyperFrames 渲染出带有透明 Alpha 通道的视频（或 PNG 序列）后，Rust 时间轴引擎将其以 `Clip` 形式自动放置在指定视频轨（如 V2）的时间位置。
+* **时间轴形态**：离线渲染完成后，Rust 时间轴引擎将原动态片段无损替换为普通的 `TrackKind::Video` 剪辑片段，并引用该 ProRes 4444 透明视频。
 
 ---
 
