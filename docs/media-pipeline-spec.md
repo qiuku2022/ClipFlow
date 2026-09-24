@@ -53,15 +53,25 @@ flowchart LR
    - 硬件解码直出格式为 `AV_PIX_FMT_NV12`（Y 亮度单平面 + UV 色度交错平面）。
    - **零 CPU 转换原则**：严禁在 CPU 侧调用 `sws_scale` 将 NV12 转为 RGBA（会导致 4K 高分辨率下 CPU 吞吐暴跌）。直接将 NV12 两个原始内存平面上传至 GPU。
 
-### 2.2 NV12 双平面 GPU 直接上传与 WGSL 着色器直出
+### 2.2 锁页内存环形池 (PinnedFramePool) 与 PCIe DMA 极速直传
 
-解码器直出的 NV12 数据不经 CPU 像素格式转换，直接通过 PCIe 传输原始双平面数据至 GPU 显存：
-wgpu 端创建两个独立纹理：
+为彻底杜绝 4K 60fps 场景下每秒处理 746MB 数据引发的 Windows 堆管理器锁竞争与页面换出（Page Fault），`clipflow-media` 严格执行**锁页内存环形池**与 **PCIe DMA 零分配直传**：
+
+1. **预分配与物理页锁定**：
+   - 系统初始化时调用 Windows `VirtualAlloc` 一次性预分配固定容量（默认 64 槽位，单槽 12.5MB）的环形池，并通过 `VirtualLock` 钉住物理内存，禁止操作系统将帧缓冲换出到页面文件；
+   - 内存对齐严格遵循 4KB 页面边界与 64-byte CPU 缓存行对齐，确保 PCIe 控制器以最大突发（Burst DMA）吞吐直传。
+2. **解码与上传双端对象复用**：
+   - FFmpeg 解码线程从 `PinnedFramePool` 获取空闲槽位，调用 `av_hwframe_transfer_data` 将显存数据直接写入锁页内存；
+   - 主渲染线程调用 `queue.write_texture` 直接将锁页数据提交给 GPU，消费完毕后立即将槽位归还空闲队列，实现**连续播放期间堆内存 0 分配、0 抖动**。
+
+### 2.3 NV12 双平面 GPU 上传与 WGSL 全色域自适应色彩空间矩阵 (`ColorMatrixEngine`)
+
+解码器直出的 NV12 数据直接通过 PCIe 传输原始双平面数据至 GPU 显存，wgpu 端创建两个独立纹理：
 - **`texture_y`**：格式 `wgpu::TextureFormat::R8Unorm`（分辨率 $W \times H$）
 - **`texture_uv`**：格式 `wgpu::TextureFormat::Rg8Unorm`（分辨率 $W/2 \times H/2$）
 
 #### WGSL 色彩空间矩阵转换着色器 (`nv12_to_rgba.wgsl`)
-支持 **BT.709 (HD/4K)** 与 **BT.601 (SD)** 色彩空间自适应转换，内置线性插值与无损色域校准：
+支持 **BT.709 (HD/4K)** 与 **BT.601 (标清)**，并内置**有限范围（Limited Range 16-235）与全范围（Full Range 0-255）自动适应机制**，彻底消除暗部死黑与高光发灰，色彩精度锁定在 $\Delta E_{00} \le 0.5$：
 
 ```wgsl
 struct VertexOutput {
@@ -73,27 +83,44 @@ struct VertexOutput {
 @group(0) @binding(1) var texture_y: texture_2d<f32>;
 @group(0) @binding(2) var texture_uv: texture_2d<f32>;
 
-struct ColorMatrixUniform {
-    matrix: mat3x3<f32>,
-    offset: vec3<f32>,
+struct ColorParams {
+    matrix_row0: vec4<f32>,
+    matrix_row1: vec4<f32>,
+    matrix_row2: vec4<f32>,
+    yuv_offset: vec4<f32>,
 };
-@group(0) @binding(3) var<uniform> color_matrix: ColorMatrixUniform;
+@group(0) @binding(3) var<uniform> params: ColorParams;
+
+@vertex
+fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
+    var out: VertexOutput;
+    // 全屏大三角形算法 (无需顶点缓冲)
+    let x = f32(i32(in_vertex_index & 1u) * 4 - 1);
+    let y = f32(i32(in_vertex_index & 2u) * 2 - 1);
+    out.position = vec4<f32>(x, y, 0.0, 1.0);
+    out.tex_coords = vec2<f32>((x + 1.0) * 0.5, (1.0 - y) * 0.5);
+    return out;
+}
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    // 采样 Y 分量与 UV 分量
+    // 采样 Y 单通道与 UV 双通道 (硬件双线性插值自动完成 UV 2x 上采样)
     let y = textureSample(texture_y, sampler_linear, in.tex_coords).r;
     let uv = textureSample(texture_uv, sampler_linear, in.tex_coords).rg;
 
-    // 去除偏置并应用转换矩阵 (默认 BT.709)
-    let yuv = vec3<f32>(y - 0.062745, uv.x - 0.50196, uv.y - 0.50196);
-    let rgb = color_matrix.matrix * yuv + color_matrix.offset;
+    // 扣除 YUV 动态偏置 (Limited Range 下 Y-0.062745, UV-0.50196)
+    let yuv = vec3<f32>(y, uv.x, uv.y) - params.yuv_offset.xyz;
 
-    return vec4<f32>(clamp(rgb, vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+    // 无分支矩阵点乘快速转为标准 RGB
+    let r = dot(params.matrix_row0.xyz, yuv);
+    let g = dot(params.matrix_row1.xyz, yuv);
+    let b = dot(params.matrix_row2.xyz, yuv);
+
+    return vec4<f32>(clamp(vec3<f32>(r, g, b), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
 }
 ```
 
-### 2.3 监视器视窗与 `egui::TextureId` 绑定
+### 2.4 监视器视窗与 `egui::TextureId` 绑定
 
 - 在每帧 egui 渲染阶段前，`wgpu` 将片段合成至离屏帧缓冲区（Off-screen Framebuffer）。
 - 通过 `egui_wgpu::Renderer::register_native_texture` 注册为 `egui::TextureId`。
@@ -149,6 +176,17 @@ $$\text{Time}_{\text{audio}} = \frac{\text{TotalSamplesConsumed}}{\text{SampleRa
   3. 停止拖拽（Mouse Release）后，以释放点所在帧为基准重新启动音频硬件流。
 - **变速播放 (0.5x ~ 2.0x)**：
   - 音频流经由 WSOLA（Waveform Similarity Overlap-Add）变调不变速算法实时重采样处理，确保音频语调正常。
+
+### 3.5 监视器自适应下采样流控调度器 (`ProxyGovernor`) 与背压控制
+
+为避免在常规小面积监视器视口中盲目上传 4K 60fps 原图造成总线竞争，并保证高速拖拽时毫秒级跟手响应，集成三态自适应流控调度器：
+
+1. **三态分辨率调度矩阵**：
+   - **`Full` (1/1, 3840x2160, ~746 MB/s)**：视频暂停（`Paused`）或单帧精修时激活，保障调色与画面细节核验达到广播级所见即所得；
+   - **`Half` (1/2, 1920x1080, ~186 MB/s)**：常规播放（`PlayingNormal`）且物理视口宽度 $\le 1440\text{px}$ 时自适应切入，总线带宽节省 $75\%$；
+   - **`Quarter` (1/4, 960x540, ~46 MB/s)**：快速拖拽（`ScrubbingFast`）或多机位/多轨并发 $\ge 3$ 时强行激活，拖拽响应锁定在 $\le 25\text{ms}$，PCIe 吞吐死锁在 $\le 60\text{ MB/s}$。
+2. **深度 $\le 3$ 严格背压流控（Backpressure Flow Control）**：
+   - 解码线程与 GPU 上传队列之间通过 `sync::Condvar` 实现流控门禁。未消费就绪帧满 3 帧时，解码工作线程自动挂起；GPU 消费一帧后立刻通知唤醒，杜绝音画漂移累积与内存无序膨胀。
 
 ---
 
@@ -243,3 +281,31 @@ flowchart TD
 ### 5.1 导出特性与质量规约
 - **背压控制 (Backpressure)**：GPU 合成帧率与 NVENC 编码吞吐量严格保持流控队列深度 $\le 3$，防止内存无限制溢出。
 - **色彩空间一致性**：导出渲染通道强制使用 Rec.709 全范围（Full Range）或限制范围（Limited Range，TV标准），与节目监视器预览所见即所得。
+
+---
+
+## 6. 多媒体管线三级容灾降级与 DeviceLost 自愈状态机
+
+为保障桌面客户端在 Windows 异构环境下的极致稳定性，多媒体管线集成自动化容灾看门狗：
+
+### 6.1 三级解码平滑降级梯队
+1. **第一梯队（默认首选）**：`AV_HWDEVICE_TYPE_D3D11VA` 专用硬件加速芯片解码；
+2. **第二梯队（驱动异常回退）**：`AV_HWDEVICE_TYPE_DXVA2` 兼容模式；
+3. **第三梯队（终极兜底）**：多线程 CPU 软解（`threads = available_cores`）。若显卡硬件驱动彻底崩溃或遇畸变损坏流，50ms 内无感切换至软解，**100% 杜绝软件闪退**。
+
+### 6.2 DirectX 12 `DeviceLost` 毫秒级无感自愈
+当遭遇显示器休眠唤醒、HDR 切换或显卡驱动 TDR 超时重置（`DXGI_ERROR_DEVICE_RESET`）时：
+- 主进程捕获错误并触发轻量级设备重建；
+- 冻结当前时间码（PTS 保持不变），重新初始化 `wgpu::Device` 与着色器管道；
+- 直接从 `PinnedFramePool` 提取当前帧重新上屏，恢复耗时 $\le 100\text{ms}$，撤销事务栈与用户编辑数据零丢失。
+
+---
+
+## 7. 远期演进：FFmpeg 9.0.2 原生 D3D12VA 零拷贝与接口解耦
+
+针对远期百轨 8K RAW 等极端重载工况，ClipFlow 建立清晰的技术路线分水岭：
+
+1. **废止基于 `wgpu-hal` 跨 API 共享（路线 B）**：严禁在生产代码中使用脆弱的 D3D11-to-D3D12 DXGI NT Handle 穿透；
+2. **确立路线 C 终局演进方向**：FFmpeg 9.0.2 原生支持 `D3D12VA`。远期通过向 FFmpeg 传递 `wgpu` 底层的同一个 `ID3D12Device` 实体，实现同设备显存直接复用与队列内 Fence 同步，达成真正的同 API 物理零拷贝；
+3. **`VideoTextureProvider` 依赖反转契约**：上层时间轴与监视器仅依赖统一 trait 接口，底层可无缝在路线 A（锁页内存上传）、路线 C（D3D12VA 零拷贝）与 CPU 软解间自由切换，上层业务代码零改动。
+

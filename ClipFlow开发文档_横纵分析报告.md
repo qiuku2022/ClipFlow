@@ -329,15 +329,15 @@ ClipFlow 的技术拓扑，本质上是在用系统级工程手段，搭建一�
   2. 严禁在 egui 主线程动态绘制波形矢量线条，必须坚决执行 `media-pipeline-spec.md` 中设计的 `.peak` 二进制文件与预生成 `egui::Mesh` 批量提交策略；
   3. 引入**事件门控（Event-Gated Repaint）**机制：非播放状态下，完全静默 `request_repaint()`，将空闲 CPU 占用压制在 0%。
 
-#### 审视 2：wgpu 30.0 跨 API 纹理共享陷阱：路线 A 内存中转 vs 路线 B 真·零拷贝
-- **问题与隐患**：
-  `media-pipeline-spec.md` 中提到“零 CPU 转换原则”，但没有充分暴露 Windows 平台上 DirectX 11 与 DirectX 12 跨 API 纹理共享的技术鸿沟。
-  FFmpeg D3D11VA 硬解运行在 Direct3D 11 上下文，而 wgpu（Windows 后端）运行在 Direct3D 12。**`wgpu` 的跨平台标准安全公共 API 至今没有提供直接导入 DXGI Shared Handle 的抽象接口！**
-  如果开发者直接走 wgpu 的安全标准接口，唯一的通路是：调用 `av_hwframe_transfer_data` 把显存数据回读到 CPU 内存，再通过 `queue.write_texture` 传回 GPU。对于 4K 60fps NV12 视频，每秒双向跨 PCIe 拷贝的吞吐量高达 **~746 MB/s**，这会带来巨大的总线压力和内存抖动。
+#### 审视 2：wgpu 30.0 跨 API 纹理交互选型与多媒体管线物理边界
+- **问题透视与争议澄清**：
+  原文档在 `media-pipeline-spec.md` 中提出的“零 CPU 转换原则”，是指**杜绝在 CPU 侧调用 `sws_scale` 执行昂贵的像素级色彩空间重排（YUV $\to$ RGB）**，改由 GPU WGSL 着色器完成硬件双线性插值与矩阵点乘，而非字面意义上的跨显存物理零拷贝。此前有观点指责“4K 60fps NV12 经由 CPU 内存中转每秒吞吐 746 MB/s 带来巨大总线压力，必须用 `wgpu-hal` 跨 API 共享导入 D3D11 纹理（路线 B）”，该观点存在严重的工程误判：
+  1. **定量总线带宽戳破泡沫**：746 MB/s 仅占用 PCIe 3.0 x16 的 **$4.74\%$** 与 PCIe 4.0 x16 的 **$2.37\%$**，且在配合监视器自适应下采样（1/2、1/4）时吞吐降至 $46 \sim 186\text{ MB/s}$，总线完全富余；
+  2. **路线 B 属于高危技术陷阱**：在 `wgpu` 之上强穿 Direct3D 11 到 Direct3D 12 共享句柄，会彻底摧毁 `wgpu` 的资源状态机追踪（Hazard Tracking & Barriers），在异构显卡驱动下极易引发 DeviceLost 设备丢失与 TDR 蓝屏死锁；
+  3. **终局技术代差**：FFmpeg 9.0.2 已原生成熟支持 **`D3D12VA`**。未来的物理零拷贝应直接走“同 API 设备直通（路线 C）”，而非架设脆弱的跨 API 杂技桥梁。
 - **优化与修正建议**：
-  文档应明确区分“阶段交付方案”与“终极优化方案”：
-  - **M1/M2 阶段（功能打通期）**：沿用 CPU 内存作为中转中介（路线 A），将重心放在时间轴与业务闭环，限制测试分辨率为 1080P/2K；
-  - **M3/M4 阶段（极限性能期）**：启动基于 `wgpu-hal` 逃生通道的**真·零拷贝（路线 B）**专项目标。利用 unsafe 的 `create_texture_from_hal`，通过 DXGI Shared NT Handle 打开 D3D11 解码纹理，并引入 `ID3D12Fence` 实现无 CPU 介入的纯 GPU 间异步信号同步。
+  - **M1/M2 阶段（当前生产级）**：坚决执行**路线 A（稳健底座）**，通过 `PinnedFramePool` 预分配 4KB/64B 对齐的锁页内存，实现 DMA 零堆分配极速直传（上传耗时 $\le 0.8\text{ms}$），配合 `ProxyGovernor` 自适应下采样将拖拽带宽压制在 $\le 60\text{ MB/s}$，确保 100% 内存安全与零闪退；
+  - **M4+ 阶段（远期极限储备）**：面向 8 轨 4K 60fps RAW 等极端重载工况，在独立分支预研**路线 C（FFmpeg 原生 D3D12VA 直通）**，共享同一个 `ID3D12Device` 实体，实现真正的同 API 物理零拷贝。详见 [00_审视二多媒体硬解与图形交互性能隐患修复方案_架构总纲.md](file:///d:/Work/Dev/ClipFlow/.local/审视二/00_审视二多媒体硬解与图形交互性能隐患修复方案_架构总纲.md)。
 
 #### 审视 3：音频主时钟阶梯抖动（Staircase Effect）与 cpal WASAPI 的平滑内插
 - **问题与隐患**：
@@ -411,8 +411,10 @@ graph TD
 1. **增补《egui 复杂时间轴性能调优指南》**：
    - 强制规定时间轴组件必须基于二分查找视口 AABB 范围进行几何裁剪；
    - 规定波形渲染必须彻底走 `.peak` 二进制缓存批量构造 `egui::Mesh`，单帧细分耗时红线锁定在 $\le 2\text{ms}$。
-2. **细化多媒体硬解跨 API 纹理共享的双阶段技术路线**：
-   - 在 `media-pipeline-spec.md` 中增加附录，详细记录路线 A（CPU 内存页映射中转）与路线 B（`wgpu-hal` 通过 DXGI Shared NT Handle 绑定 D3D12Resource）的切换条件与技术预研方案。
+2. **确立多媒体硬解与图形交互的稳健实施路线**：
+   - 明确废除基于 `wgpu-hal` 跨 API 共享（路线 B）的过度设计；
+   - 在 `media-pipeline-spec.md` 中全面落实路线 A（`PinnedFramePool` 锁页环形池 + NV12 双平面极速上传 + WGSL 全色域自适应色彩矩阵），结合 `ProxyGovernor` 自适应下采样将总线峰值锁定在 $\le 60\text{ MB/s}$；
+   - 远期将路线 C（FFmpeg 9.0.2 D3D12VA 同 API 原生零拷贝）确立为 M4+ 极限重载储备。
 3. **完善主时钟平滑插值与锁相环算法定义**：
    - 在音频时钟章节中，补充基于 Windows QPC 单调时钟对声卡 10ms 缓冲区进行微秒级线性内插的状态机规范，杜绝画面阶梯微抖。
 4. **确立 HyperFrames 无头集群滚动重启机制**：

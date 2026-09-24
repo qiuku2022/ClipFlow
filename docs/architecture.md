@@ -115,6 +115,11 @@ flowchart TD
   3. **`Interacting` (即时交互态)**：拖拽播放头或缩放时，以满刷新率即时响应；
   4. **跨线程点火唤醒**：后台 Python ASR 片段到达或 FFmpeg 解码就绪时，通过持有的 `egui::Context` 发送单次 `request_repaint()` 穿透唤醒主消息泵。
 
+### 4.4 多媒体接口解耦与容灾自愈 (`VideoTextureProvider`)
+- **依赖反转与多态提供者**：定义 `VideoTextureProvider` trait 统一契约，解耦解码器与 egui 监视器视口。默认执行路线 A（D3D11VA 硬解 + 锁页内存 `PinnedFramePool` + WGSL 色彩矩阵）；远期面向极端多机位可无缝切换至路线 C（FFmpeg 9.0.2 原生 D3D12VA 同设备直通），上层 UI 零改动；
+- **自适应流控与背压调度**：集成 `ProxyGovernor` 调度器，快速拖拽时自动切入 1/4 代理（540P），总线带宽锁定在 $\le 60\text{ MB/s}$，拖拽延迟 $\le 25\text{ms}$；队列深度 $\le 3$ 背压控制防止内存堆积；
+- **三级容灾与 DeviceLost 无感自愈**：硬件解码在 D3D11VA $\to$ DXVA2 $\to$ 多线程 CPU 软解间平滑降级；DirectX 显卡驱动 TDR 超时或设备丢失时在 100ms 内无感重建管线，保证工程与编辑状态 100% 留存。
+
 ---
 
 ## 5. 导演级 Agent 工作流与协同机制
