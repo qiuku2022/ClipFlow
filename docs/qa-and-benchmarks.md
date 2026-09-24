@@ -37,6 +37,11 @@
 | **动效母带导出坏帧率** | 10000 帧长动效导出坏帧/丢帧 | **严格 0 帧 (100% 完整)** | 0 帧 | FFmpeg `nullsink` 全帧连续性与解码完整性校验 |
 | **ASR 推理倍速** | Whisper `large-v2` (INT8) | **$\ge 12\times$ 实时倍速 (GPU)** | $\ge 8\times$ (GPU) | 10 分钟口播转写耗时统计 ($\le 50\text{s}$) |
 | **粗剪切口平滑度** | 气口剪切处爆音/吞字率 | **0 吞字 / 0 爆音** | 瑕疵率 $< 0.1\%$ | 音频波形过零点与微淡入淡出检测 |
+| **孤儿进程逃逸率** | 宿主 Panic/任务管理器强杀 | **严格 $0.0\%$ (零逃逸)** | 严格 $0.0\%$ | Windows Job Object 级联强杀子孙进程树验收 |
+| **物理崩溃捕获感知延迟** | 子进程段错误退出到主进程感知 | **$\le 1.0\text{ ms}$** | $\le 5.0\text{ ms}$ | 命名管道 `BrokenPipe` / `EOF` 异步事件响应耗时 |
+| **IPC 控制信令往返 (RTT)** | 4KB JSON-RPC 请求响应 | **$\le 0.35\text{ ms}$** | $\le 1.0\text{ ms}$ | Windows 命名管道 (NPFS) Overlapped I/O 测算 |
+| **长任务租约误杀率** | 60 分钟长音频口播 ASR 转写 | **严格 $0.0\%$ (零误杀)** | 严格 $0.0\%$ | `ProgressLeaseTracker` 分片自适应动态延期验收 |
+| **CUDA OOM 降级 CPU 耗时** | 显存耗尽捕获并以 CPU 模式重载 | **$\le 3.5\text{ s}$** | $\le 5.0\text{ s}$ | `FallbackGovernor` L2 模式匹配与 CPU 模式拉起耗时 |
 
 ---
 
@@ -188,8 +193,12 @@ cargo test -p clipflow-timeline --test project_serialization_stress -- --nocaptu
 ```
 
 ### 5.2 子进程自愈容灾测试 (Resilience & Chaos Test)
-- **模拟场景**：在主进程处于空闲、剪辑或播放状态时，通过外部命令强制终止 `python.exe` 或 `node.exe` 进程。
-- **合格判定**：
-  1. Rust 宿主主进程绝不发生崩溃或闪退；
-  2. 界面弹出轻量 Toast 提示：“智能计算服务意外断开，正在后台自愈重启...”；
-  3. `clipflow-ipc` 协调器在 **2 秒内** 静默重新拉起子进程并恢复通信握手。
+- **测试场景 1：孤儿进程零逃逸验证**：
+  - 启动包含 Python Worker 与 Node.js/Chromium 的完整工程，调用 Win32 `TerminateProcess` 强制瞬间杀死主进程；
+  - 合格断言：操作系统进程表中绝无任何残留的 `python.exe`、`node.exe` 或 `chrome.exe`，孤儿逃逸率严格为 **$0.0\%$**。
+- **测试场景 2：物理崩溃即时捕获与 Stdio 防死锁测试**：
+  - 子进程以 10,000 行/秒狂吐 50MB 垃圾日志到 `stderr`，同时注入 `SIGSEGV` 段错误；
+  - 合格断言：主进程读通道在 **$\le 1.0\text{ms}$** 内收到 `BrokenPipe`，且主事件循环零挂起，死锁率严格为 **$0.0\%$**。
+- **测试场景 3：CUDA OOM 自愈降级 CPU 模式演练**：
+  - 模拟显存不足抛出 `torch.cuda.OutOfMemoryError`；
+  - 合格断言：`FallbackGovernor` 自动捕获并在 **$\le 3.5\text{s}$** 内降级为 CPU 模式重新拉起，时间轴工程数据 100% 留存，UI 提示温和明确；连续失败时触发 L3 熔断器，绝不引发死循环雪崩。

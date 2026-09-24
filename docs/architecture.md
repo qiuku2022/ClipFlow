@@ -50,7 +50,7 @@ flowchart TD
 
     subgraph Python_Worker ["智能计算子进程 (Python 3.13 / uv)"]
         direction TB
-        PyIPC["IPC Bridge (Stdio / JSON-RPC)"]
+        PyIPC["IPC Bridge (Named Pipe JSON-RPC 2.0)"]
         ASR_Engine["faster-whisper 1.2.1 (large-v2, INT8)"]
         SpeechCleaner["口播文本断句与冗余停顿消除"]
         PyIPC --> ASR_Engine
@@ -65,9 +65,9 @@ flowchart TD
         HF_CLI --> HF_Compiler --> FrameCapture
     end
 
-    SubprocessManager <==>|结构化 IPC| PyIPC
-    SubprocessManager -->|任务调度| HF_CLI
-    FrameCapture -->|透明视频流/PNG序列| Media_Pipeline
+    SubprocessManager <==>|双工异步命名管道 + 独立 stderr 排水| PyIPC
+    SubprocessManager -->|任务调度 & 共享内存| HF_CLI
+    FrameCapture -->|Windows 命名共享内存 Raw RGBA| Media_Pipeline
 ```
 
 ---
@@ -125,6 +125,13 @@ flowchart TD
 - **无锁单调箝位主时钟 (`MonotonicClampedClock`)**：底层通过 WASAPI `IAudioClock::GetPosition` 硬件锁存 DAC 物理样本计数值与系统 QPC 时间戳，消除静态时延估算误差；上层采用 SeqLock 双缓冲与 CAS 单调过滤，限制最大外推跨度 $\le 1.5\times$ 周期（15ms），保证时钟输出绝对单调递增，彻底杜绝音频欠载补发时产生的“时间倒流（Time Inversion）”与监视器抽搐；
 - **双阈值迟滞比较与前瞻锁相 (`HysteresisSyncComparator`)**：引入施密特触发器回线（$[-8\text{ms}, +8\text{ms}]$ 恢复锁定，$|\Delta t| > 12\text{ms}$ 退出调整），叠加 8.33ms VSync 垂直刷新半帧前瞻，彻底抹平 10ms 缓冲区离散阶梯拍频顿挫；
 - **高频运控门控与设备自愈看门狗**：高频拖拽（Scrubbing）期间时钟物理冻结在手动目标位置，释放鼠标瞬间原子重置时钟基准；100ms 心跳看门狗监控声卡健康度，在设备拔出或驱动断连时无缝降级为基于纯 QPC 的逻辑单调时钟，主视窗保持丝滑拖拽与剪辑，绝不闪退。
+
+### 4.6 多运行时进程生命周期与容灾协调架构 (`SubprocessCoordinator`)
+- **内核级生命周期强绑定 (`JobGuard`)**：主进程启动即创建配置了 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` 的专属 Windows Job Object；通过 `CREATE_SUSPENDED` 原子挂入 Python 与 Node.js 进程树，彻底杜绝主进程异常终止或被杀时孤儿进程常驻显存（逃逸率严格 $0.0\%$）；
+- **服务接口抽象与依赖反转 (`AsrWorkerProvider`)**：业务时间轴引擎仅持有 `Arc<dyn AsrWorkerProvider>` 抽象接口，彻底解耦具体 Python 脚本环境。提供生产级 `LocalPythonAsrWorker` 与毫秒级纯内存测试桩 `MockAsrWorker`，满足严苛单元测试与动态算力演进；
+- **双信道隔离与防死锁拓扑**：信令走异步双工命名管道（`\\.\pipe\clipflow-py-{pid}`），往返耗时 RTT $\le 0.35\text{ms}$；子进程 `stderr` 由独立异步任务流式消费并注入 Rust `tracing` 集中落盘，彻底根除 MSVCRT 4KB 缓冲死锁；
+- **双轨看门狗与长任务进度租约 (`ProgressLeaseTracker`)**：0ms 物理 BrokenPipe 即时捕获句柄关闭；流式 ASR 推理按 2 秒分片动态续约（动态租约窗口 $W_i = d_{\text{chunk}} \times \text{RTF} \times 3.0 + 1.5\text{s}$），彻底消除长视频推理被静态心跳误杀隐患（误杀率严格 $0.0\%$）；
+- **三级容灾与 CUDA 自愈降级状态机 (`FallbackGovernor`)**：L1 瞬态抖动 500ms 指数退避重试（限 1 次） $\to$ L2 捕获显存 OOM 或驱动缺失自动降级为 CPU 模式拉起（耗时 $\le 3.5\text{s}$）并在 UI 提示 $\to$ L3 连续崩溃熔断隔离并弹出诊断看板，时间轴工程数据 100% 留存，保障纯手动剪辑不受任何影响。
 
 ---
 

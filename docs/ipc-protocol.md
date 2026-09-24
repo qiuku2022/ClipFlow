@@ -1,12 +1,14 @@
 # 进程间通信与接口协议 (IPC Protocol)
 
-## 1. 概述与通信信道
+## 1. 概述与通信信道架构
 
-- **Rust 主进程 (Client/Coordinator)** $\longleftrightarrow$ **Python 智能子进程 (ASR/NLP Worker)**
-  - 底层信道：标准输入输出流（`stdin` / `stdout`）或 本地命名管道（Windows Named Pipe `\\.\pipe\clipflow-py-worker`）。
-  - 通信格式：换行符分隔的 JSON（NDJSON）或 JSON-RPC 2.0。
-- **Rust 主进程 (Coordinator)** $\longrightarrow$ **HyperFrames 动效渲染器 (Worker)**
-  - 底层信道：CLI 子进程调用或 本地 HTTP/WebSocket 协议驱动 Headless 浏览器。
+- **内核级生命周期约束**：所有派生的 Python 和 Node.js 子进程，在创建时必须以 `CREATE_SUSPENDED` 状态原子化纳入 Windows **`Job Object`**（配置 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`），确保宿主主进程发生任何异常终止时，内核级联强杀整棵子孙进程树，孤儿逃逸率严格为 **$0.0\%$**。
+- **Rust 主进程 (Coordinator)** $\longleftrightarrow$ **Python 智能子进程 (ASR/NLP Worker)**
+  - **信令信道 (信道 A)**：Windows 异步双工命名管道（`\\.\pipe\clipflow-py-{pid}`），采用 Overlapped I/O 与标准换行符分隔的 **JSON-RPC 2.0** 协议，控制往返耗时 RTT $\le 0.35\text{ms}$。
+  - **日志排水管线 (信道 B)**：独立非阻塞管道实时读取子进程标准错误（`stderr`），由 Tokio 异步任务持续流式排空，彻底杜绝 MSVCRT 4KB 块缓冲死锁，并将日志结构化注入 Rust `tracing` 集中落盘。
+- **Rust 主进程 (Coordinator)** $\longleftrightarrow$ **HyperFrames 动效渲染器 (Worker)**
+  - 控制信道：CLI 驱动与异步命名管道（`\\.\pipe\clipflow-hf-{pid}`）下发渲染指令。
+  - 像素信道：Windows 命名共享内存（`CreateFileMappingW`）三槽位环形池极速直传 Raw RGBA，单帧 4K 延迟 $\le 1.5\text{ms}$，详见 `hyperframes-spec.md`。
 
 ---
 
@@ -129,3 +131,48 @@ Rust 调度器生成 HTML/CSS 动画描述文件后，向 HyperFrames 触发渲�
 
 ### 3.2 渲染结果上架时间轴
 HyperFrames 渲染出带有透明 Alpha 通道的视频（或 PNG 序列）后，Rust 时间轴引擎将其以 `Clip` 形式自动放置在指定视频轨（如 V2）的时间位置。
+
+---
+
+## 4. 0ms 物理句柄捕获与分片任务进度租约协议 (Watchdog & Progress Lease)
+
+为杜绝传统固定周期心跳对长耗时 AI 推理的频繁误杀，同时兼顾微秒级崩溃感知，通信系统遵循**双轨看门狗契约**：
+
+### 4.1 物理崩溃微秒级抢占中断 (0ms 物理感知)
+- 主进程基于 Tokio IOCP 监听命名管道驱动，若子进程遭遇不可控崩溃（如段错误、内存越界、强制杀进程），Windows 内核自动关闭管道句柄；
+- 主进程读通道在 **$\le 1.0\text{ms}$** 内捕获 `ErrorKind::BrokenPipe` 或 `ErrorKind::UnexpectedEof`，直接跳过任何超时等待，瞬间触发自愈状态机。
+
+### 4.2 长任务分片进度租约契约 (Progress Lease)
+- **租约签发**：主进程下发 ASR 或长视频分析任务时，签发初始租约 $L_{\text{expire}} = t_{\text{now}} + W_0$（$W_0 = 3.5\text{s}$）；
+- **动态续约**：子进程采用流式分片模式（约每 2.0s 音频输出一个 `asr.segment` 事件）。主进程每收到一个分片事件，基于当前单片耗时与安全抖动因子（$\alpha = 3.0$）原子更新租约到期时间戳：
+  $$L_{\text{expire}} = t_{\text{now}} + \max(d_{\text{chunk}} \times \text{RTF} \times 3.0 + 1.5\text{s}, \; 2.0\text{s})$$
+- **死锁判定**：后台看门狗每 200ms 执行无锁检查，仅在 $t_{\text{now}} > L_{\text{expire}}$ 时判定为计算挂起/GIL 锁死，死锁误杀率严格为 **$0.0\%$**。
+- **任务取消令牌 (`CancellationToken`)**：用户在界面执行切片或撤销时，主进程发送 `{"method": "task.cancel", "params": {"task_id": "..."}}`，子进程在 $\le 10\text{ms}$ 内清空当前计算分块并重置租约。
+
+---
+
+## 5. 三级故障自愈与硬件平滑降级状态机 (Fault Recovery & Fallback)
+
+子进程异常退出时，看门狗读取 `stderr` 缓存并通过 `FaultClassifier` 执行归类，严禁无脑连环重启：
+
+```mermaid
+stateDiagram-v2
+    [*] --> Standby: 启动准备
+    Standby --> Running_CUDA: 默认拉起 (CUDA INT8, large-v2)
+    
+    Running_CUDA --> Retrying_L1: 捕获瞬态抖动 (非 OOM)
+    Retrying_L1 --> Running_CUDA: 指数退避 500ms 重试成功 (限 1 次)
+    Retrying_L1 --> Tripped_L3: 重试再次失败
+    
+    Running_CUDA --> Fallback_L2: 捕获显存 OOM / CUDA 驱动报错
+    Fallback_L2 --> Running_CPU: 自动降级配置 (device="cpu", INT8)
+    
+    Running_CPU --> Tripped_L3: CPU 模式再次崩溃
+    
+    Tripped_L3 --> Isolated: 熔断隔离 (停止自动拉起)\n弹出诊断看板，保留时间轴工程
+    Isolated --> Standby: 用户点击环境修复并重试
+```
+
+- **Level 1 (瞬态抖动)**：非硬件类偶发中断，携带指数退避与随机抖动（$500\text{ms} \sim 700\text{ms}$），严格最多重试 1 次；
+- **Level 2 (硬件降级)**：匹配到 `OutOfMemoryError`、`cublas alloc failed` 或 CUDA 驱动版本不兼容时，子进程参数由 `--device cuda` 自动降级为 `--device cpu`（批大小 8，INT8）重新拉起，耗时 $\le 3.5\text{s}$，并在 UI 弹出温和通知；
+- **Level 3 (熔断隔离)**：连续 2 次无法自愈或检测到环境缺失（Exit Code 9009 / ModuleNotFoundError），彻底冻结子进程拉起，通过 egui 渲染诊断看板，时间轴工程数据 100% 保留，用户可继续进行纯手动剪辑。

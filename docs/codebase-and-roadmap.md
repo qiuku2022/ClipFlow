@@ -77,7 +77,7 @@ flowchart TD
 | **`clipflow-common`** | `serde`, `uuid`, `thiserror` | 亚毫秒 `RationalTime`、`TimeRange`、SMPTE 时间码、系统统一 `Result<T, ClipFlowError>`。绝不依赖渲染和媒体库。 |
 | **`clipflow-timeline`**| `clipflow-common`, `zstd` | `Project`, `Sequence`, `Track`, `Clip`, `Keyframe` 数据模型；`TimelineCommand` 命令栈（Undo/Redo）；`.clipflow` 序列化与反序列化。纯数据与状态机，无 GUI 依赖。 |
 | **`clipflow-media`** | `ffmpeg-sys-next` (9.0.2), `wgpu` 30.0, `cpal`, `windows` | 视频硬解（D3D11VA）、锁页环形帧池（`PinnedFramePool`）、NV12 双平面极速上传、WGSL 全色域色彩矩阵着色器、监视器自适应下采样（`ProxyGovernor`）、WASAPI 硬件 DAC 时钟锚定、`MonotonicClampedClock` 无锁单调箝位外推主时钟、双阈值迟滞渲染调度（`HysteresisSyncComparator`）、波形峰值文件 (`.peak`) 生成、Windows 命名共享内存 Raw RGBA 消费器（`SharedMemoryConsumer`）、动效帧完成账本（`FrameLedger`）与多媒体三级容灾看门狗。 |
-| **`clipflow-ipc`** | `tokio`, `serde_json`, `interprocess`, `windows` | 管理 Python (`uv`) 和 Node.js 子进程启动、保活、心跳检测、Windows 命名管道/标准流异步 JSON-RPC 调度与 HyperFrames 动效进程容灾看门狗（`MotionWatchdog`）。 |
+| **`clipflow-ipc`** | `tokio`, `serde_json`, `interprocess`, `windows-sys` | 管理 Python (`uv`) 和 Node.js 子进程生命周期；Windows 内核级 `JobGuard` 作业对象强绑定（`KILL_ON_JOB_CLOSE` 零孤儿逃逸）；Windows 异步双工命名管道驱动（`\\.\pipe\clipflow-*` JSON-RPC 2.0）；子进程 `stderr` 独立异步非阻塞排水管线（`AsyncStderrDrainer` 消除 4KB 缓冲死锁）；双轨看门狗（0ms 物理 BrokenPipe 即时捕获 + 分片任务进度租约 `ProgressLeaseTracker`）；三级容灾自愈状态机（`FallbackGovernor`: L1 重试 $\to$ L2 CUDA OOM/驱动缺失自愈降级 CPU $\to$ L3 熔断隔离）；跨语言 ASR 服务契约抽象（`AsrWorkerProvider`）与纯内存测试桩（`MockAsrWorker`）。 |
 | **`clipflow-ui`** | `egui` 0.36, `egui_wgpu`, `winit` | 达芬奇底部 6 大分页 Dock 栏切换、PR 剪辑四区分屏、全局公用时间线视图渲染、关键帧曲线编辑器、工控绿视觉映射。 |
 | **`clipflow-app`** | `eframe` 0.36, `tracing` | 应用程序 `main()` 入口、跨模块依赖注入、全局状态根 (`AppState`) 托管、系统托盘与异常捕获。 |
 
@@ -116,7 +116,10 @@ timeline
   1. 执行 `cargo check --workspace` 编译零警告；
   2. 启动 `cargo run` 正常渲染出应用窗口（带有 12px Win 11 圆角和纯黑底色）；
   3. 底部达芬奇 Dock 栏 6 大分页按钮可自由点击切换，底部时间线骨架常驻保持；
-  4. Rust 主进程拉起 Python `uv` 子进程，完成 `ping` / `pong` 管道测试。
+  4. **内核级进程绑定与信道握手**：
+     - Windows `JobGuard` 作业对象生效，主进程通过 `CREATE_SUSPENDED` 原子挂入 Python `uv` 子进程；
+     - 主进程意外退出或任务管理器强杀时，系统后台无任何残留孤儿进程（孤儿逃逸率严格为 **$0.0\%$**）；
+     - 基于异步双工命名管道（`\\.\pipe\clipflow-py-{pid}`）完成 JSON-RPC 2.0 `ping` / `pong` 握手，RTT 延迟 $\le 0.5\text{ms}$。
 
 ---
 
@@ -129,7 +132,10 @@ timeline
      - 源监视器支持双击素材试看，标记入出点并拖入时间轴；
      - 节目监视器实时呈现时间轴多轨叠加画面；
   3. **硬解与音画同步**：D3D11VA 硬解经由 `PinnedFramePool` 锁页帧池上传，`ProxyGovernor` 快速拖拽自适应代理生效；`cpal` (WASAPI) 驱动发声，`MonotonicClampedClock` 无锁单调外推时钟生效（时间倒流严格 0 次，单帧步进微抖 $\le 0.05\text{ms}$），双阈值迟滞比较器锁定，音画全流程漂移死锁在 $\le 2.0\text{ms}$；拖拽响应 $\le 25\text{ms}$；
-  4. **时间轴核心工具**：支持选择工具 (V)、剃刀分割工具 (C)、波纹删除 (Shift+Del)，支持快捷键 `Ctrl + Z` / `Ctrl + Y` 撤销重做。
+  4. **时间轴核心工具**：支持选择工具 (V)、剃刀分割工具 (C)、波纹删除 (Shift+Del)，支持快捷键 `Ctrl + Z` / `Ctrl + Y` 撤销重做；
+  5. **IPC 防死锁与 0ms 崩溃捕获**：
+     - `AsyncStderrDrainer` 持续排空子进程日志，在高密度日志（10,000 行/秒）下死锁率严格为 **$0.0\%$**，日志无缝沉淀至 `tracing`；
+     - 模拟子进程段错误退出，主进程通过命名管道 `BrokenPipe` 在 **$\le 1.0\text{ms}$** 内完成即时异常感知，绝不陷入超时假死。
 
 ---
 
@@ -137,9 +143,14 @@ timeline
 
 - **目标**：打通口播视频核心提效痛点——基于文本的一键粗剪与字幕整理。
 - **核对项与验收标准**：
-  1. **本地高精度转写**：Python 子进程加载 `faster-whisper 1.2.1` (`large-v2`, INT8)，在支持 CUDA 的设备上实现 10x 实时倍速转写，无显卡自动降级 CPU；
+  1. **本地高精度转写与分片进度租约**：
+     - Python 子进程加载 `faster-whisper 1.2.1` (`large-v2`, INT8)，在支持 CUDA 的设备上实现 10x 实时倍速转写；
+     - 启用 `ProgressLeaseTracker` 分片任务进度租约机制，60 分钟长音频转写期间长任务误杀率严格为 **$0.0\%$**，死锁挂起判定窗口锁定在 $\le 4.5\text{s}$ 内；
   2. **字幕轨联动**：转写完成在时间轴 C1 轨自动铺设字幕片段，文字与音频波形毫秒级对齐；
-  3. **气口与语气词清洗**：调用 `speech.analyze_cuts` 接口，自动在时间轴上用红底标注无声停顿（$\ge 400\text{ms}$）与语气助词，点击“一键粗剪”瞬间波纹对齐。
+  3. **气口与语气词清洗**：调用 `speech.analyze_cuts` 接口，自动在时间轴上用红底标注无声停顿（$\ge 400\text{ms}$）与语气助词，点击“一键粗剪”瞬间波纹对齐；
+  4. **三级容灾与 CUDA 自愈降级 CPU 验收**：
+     - 模拟显存 OOM 或无兼容独立显卡，`FallbackGovernor` 自动捕获并在 **$\le 3.5\text{s}$** 内平滑降级为 CPU 模式拉起，UI 弹出温和通知；
+     - 模拟环境严重损坏（Exit Code 9009），熔断器生效，停止连环重启并弹出诊断看板，时间轴工程 100% 安全保留。
 
 ---
 
