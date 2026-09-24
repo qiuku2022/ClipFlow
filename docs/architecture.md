@@ -133,7 +133,19 @@ flowchart TD
 - **双轨看门狗与长任务进度租约 (`ProgressLeaseTracker`)**：0ms 物理 BrokenPipe 即时捕获句柄关闭；流式 ASR 推理按 2 秒分片动态续约（动态租约窗口 $W_i = d_{\text{chunk}} \times \text{RTF} \times 3.0 + 1.5\text{s}$），彻底消除长视频推理被静态心跳误杀隐患（误杀率严格 $0.0\%$）；
 - **三级容灾与 CUDA 自愈降级状态机 (`FallbackGovernor`)**：L1 瞬态抖动 500ms 指数退避重试（限 1 次） $\to$ L2 捕获显存 OOM 或驱动缺失自动降级为 CPU 模式拉起（耗时 $\le 3.5\text{s}$）并在 UI 提示 $\to$ L3 连续崩溃熔断隔离并弹出诊断看板，时间轴工程数据 100% 留存，保障纯手动剪辑不受任何影响。
 
+### 4.7 外部非编工程交换与合规诊断架构 (`TimelineExporter`)
+- **接口契约抽象与多格式解耦**：定义 `TimelineExporter` Trait 统领外部工程交换，将时间轴核心状态机与下游具体 XML/文本解析格式彻底解耦；
+- **M2 零阻抗切点外发管线**：
+  1. **Apple FCP7 XML (`xmeml v5`)**：平行多轨拓扑 1:1 原生映射，彻底消除 FCPX 磁性故事板 Spine 树模型的降维阻抗，经由 `quick-xml` 流式序列化输出，文件路径强制规范为 RFC 3986 `file://localhost/...` 百分号转义 URI，Premiere Pro 与 DaVinci Resolve 打开成功率 $\ge 99.9\%$；
+  2. **规范化 CMX 3600 EDL**：符合 80 列定宽对齐，Reel ID 规整映射为 8 字符，通过注入 `* FROM CLIP NAME` 与 `* SOURCE FILE` 扩展注释行传递完整 UTF-8 中文长路径，打破传统穿孔卡协议导致的乱码与套底离线死穴；
+  3. **有理数无损帧对齐**：帧序号换算全链路基于 `i128` 整数有理数整除，严禁任何 `f64` 浮点秒参与中间计算，绝对保障 1000 个连续切片 0 帧漂移；
+- **静态合规预检与降级诊断 (`ConformInspector`)**：
+  导出前静态扫描全序列图层；若挂载了 HyperFrames Web 动效（FX 轨）或复杂贝塞尔变速曲线，自动弹出三级诊断看板（Information / Warning / UnsupportedDropped），提供“推荐渲染为 Apple ProRes 4444 独立透明图层后送入 PR 叠加”等清晰指导，消灭黑盒静默丢特性的焦虑；
+- **面向未来的 OpenTimelineIO (OTIO) 通用中枢演进**：
+  为 M3+/M4 预留基于好莱坞工业标准 OTIO 的 Universal IR 适配层，支持多轨向 FCPX Spine 树模型的降维投影与双向工程回程（Round-trip Conforming）。
+
 ---
+
 
 ## 5. 导演级 Agent 工作流与协同机制
 

@@ -42,6 +42,11 @@
 | **IPC 控制信令往返 (RTT)** | 4KB JSON-RPC 请求响应 | **$\le 0.35\text{ ms}$** | $\le 1.0\text{ ms}$ | Windows 命名管道 (NPFS) Overlapped I/O 测算 |
 | **长任务租约误杀率** | 60 分钟长音频口播 ASR 转写 | **严格 $0.0\%$ (零误杀)** | 严格 $0.0\%$ | `ProgressLeaseTracker` 分片自适应动态延期验收 |
 | **CUDA OOM 降级 CPU 耗时** | 显存耗尽捕获并以 CPU 模式重载 | **$\le 3.5\text{ s}$** | $\le 5.0\text{ s}$ | `FallbackGovernor` L2 模式匹配与 CPU 模式拉起耗时 |
+| **FCP7 XML 导出纯耗时** | 60 分钟时间线 / 1000 个切点 | **$\le 15\text{ ms}$** | $\le 50\text{ ms}$ | `quick-xml` 流式无锁内存序列化压测 |
+| **CMX 3600 EDL 导出纯耗时** | 60 分钟时间线 / 1000 个切点 | **$\le 5\text{ ms}$** | $\le 20\text{ ms}$ | 80 列定宽纯文本流式生成微基准 |
+| **外部工程切点绝对漂移** | 1000 个连续切片首尾入出点 | **严格 0 帧 (0 漂移)** | 严格 0 帧 | `i128` 有理数整除与 SMPTE 帧精确断言 |
+| **外部非编套底成功率** | PR 2025/2026 与 DaVinci 19 | **$\ge 99.9\%$ (秒开)** | $\ge 99.0\%$ | 自动化工程导入脚本与无头 CLI 校验 |
+| **不可逆图层合规诊断检出率** | 挂载 HyperFrames FX 或变速 | **$100.0\%$ (零漏报)** | $100.0\%$ | `ConformInspector` 静态扫描测试断言 |
 
 ---
 
@@ -202,3 +207,18 @@ cargo test -p clipflow-timeline --test project_serialization_stress -- --nocaptu
 - **测试场景 3：CUDA OOM 自愈降级 CPU 模式演练**：
   - 模拟显存不足抛出 `torch.cuda.OutOfMemoryError`；
   - 合格断言：`FallbackGovernor` 自动捕获并在 **$\le 3.5\text{s}$** 内降级为 CPU 模式重新拉起，时间轴工程数据 100% 留存，UI 提示温和明确；连续失败时触发 L3 熔断器，绝不引发死循环雪崩。
+
+### 5.3 外部工程交换与套底精度验收测试 (NLE Interchange & Conforming Tests)
+- **测试场景 1：1000 切片 0 帧累积漂移自动化测试**：
+  - 构造包含 1000 个长度为 0.2s~1.5s 的切片序列（23.976 / 25 / 29.97 / 59.94 各帧率覆盖），调用 `CutListExtractor` 与 `Fcp7XmlSerializer`；
+  - 合格断言：相邻连续切片严格满足 $End_n \equiv Start_{n+1}$，首尾总时长帧数与时间轴有理数帧数差绝对为 **0 帧**，耗时 $\le 15\text{ms}$。
+- **测试场景 2：中文长路径与特殊字符 RFC 3986 转义验证**：
+  - 素材路径包含中文字符、空格、`&`、`#` 及网络共享盘 UNC 格式；
+  - 合格断言：生成的 FCP7 XML 中 `<pathurl>` 100% 格式化为合法 `file://localhost/...` 百分号转义 URI；EDL 扩展注释 `* FROM CLIP NAME` 完整保留原始 UTF-8 文本，无乱码或字段溢出。
+- **测试场景 3：DaVinci Resolve / Premiere Pro 实机工程导入与自动重连验证**：
+  - 导出 `.xml` 文件，通过自动化脚本或命令行调起 DaVinci Resolve 19 与 Premiere Pro 2025/2026 进行静默导入；
+  - 合格断言：工程导入零告警弹窗，媒体素材全部自动高亮上线（零 Media Offline），各切点画面与源视频严格重合。
+- **测试场景 4：HyperFrames 动效不可逆降级诊断与 ProRes 4444 替代建议验证**：
+  - 在时间轴 FX 轨道添加 3 处 HyperFrames Web 动态角标，触发导出检查；
+  - 合格断言：`ConformInspector` 100% 检出 `UnsupportedDropped` 严重度条目，并在 UI 诊断报告看板中给出“建议先渲染为 Apple ProRes 4444 独立透明图层后送入 PR 叠加”的操作建议。
+
