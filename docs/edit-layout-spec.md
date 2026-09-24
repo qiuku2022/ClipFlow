@@ -201,32 +201,48 @@
 
 为了彻底解决 `egui 0.36` 即时模式在多轨长视频（几千个碎片化口播切片 + 海量声波采样）下每帧重绘导致的 CPU 算力飙升隐患，`clipflow-ui` 模块必须严格执行以下三项性能规约：
 
-### 4.1 一维视口时间剪裁 (1D Viewport Frustum Culling)
-- **原理**：时间轴是严格单调的时间坐标轴。设当前视口可见时间窗口为 $[T_{\text{vis\_start}}, T_{\text{vis\_end}}]$，各轨道的 `Clip` 集合在内存中按 `timeline_range.start` 升序维护。
-- **实现算法**：
+### 4.1 正交二维视口剪裁与纵向轨道虚拟化 (2D Orthogonal Viewport Culling)
+- **物理拓扑**：时间轴为二维正交平面——X 轴为单调递增时间戳，Y 轴为动态高度轨道容器（普通 V 轨 64px、音频展开 120px、折叠轨 32px）。
+- **两级正交裁剪流水线**：
+  1. **Y 轴轨道垂直二分粗筛**：维护轨道顶部 Y 坐标前缀和数组 `track_y_starts: Vec<f32>`。视口垂直范围为 $[Y_{\text{min}}, Y_{\text{max}}]$，附加 $64\text{px}$（约 1 条缓冲轨）扩展裕量。利用 `partition_point` 二分快速定位可见轨道区间 $[i_{\text{start}}, i_{\text{end}})$，视口外轨道连轨道头控件与背景网格均 100% 跳过计算。
+  2. **X 轴时间单调区间二分切片筛选**：在可见轨道内，各 Clip 严格按 `timeline_range.start` 升序排列。附加 $120\text{px}$ 对应的时间裕量，通过二分查找确定首个与视口相交的片段索引：
   ```rust
-  // 严禁遍历 track.clips 全量列表！
-  // 通过二分查找确定首个与视口相交的片段索引：
-  let start_idx = track.clips.partition_point(|clip| clip.timeline_range.end_exclusive() <= vis_start);
-  
-  for clip in &track.clips[start_idx..] {
-      if clip.timeline_range.start >= vis_end {
-          break; // 超出视口右边界，立即终止遍历
+  // 1. 纵向跳过不可见轨道:
+  for track_idx in visible_tracks {
+      let track = &sequence.tracks[track_idx];
+      let clips = track.clips();
+      
+      // 2. 横向二分定位首个可见切片:
+      let start_idx = clips.partition_point(|clip| clip.timeline_range.end_exclusive() <= vis_start_with_margin);
+      for clip in &clips[start_idx..] {
+          if clip.timeline_range.start >= vis_end_with_margin {
+              break; // 超出视口右边界，立即终止横向遍历
+          }
+          render_clip(ui, track_idx, clip, &timeline_viewport);
       }
-      // 仅对当前屏幕可见片段执行布局计算与 Shape 生成
-      render_clip(ui, clip, &timeline_viewport);
   }
   ```
-- **收益**：遍历复杂度由 $O(N)$ 骤降至 $O(\log N + K)$（$K$ 为屏幕内可见片段数，通常 $< 40$），即使整条时间轴有上万个切片，每帧布局耗时依然恒定在 $< 0.5\text{ms}$。
+- **收益**：遍历复杂度由 $O(M \times N)$ 降至 $O(\log M + \log N + K)$（$K$ 为屏幕内可见总切片数，通常 $\le 80$），单帧二维粗筛耗时锁定在 $\le 0.04\text{ms}$。
 
 ### 4.2 音频波形 LOD 金字塔与网格保留 (Waveform LOD & Mesh Retaining)
-- **多级细节（LOD）选择**：
-  - 根据当前时间轴缩放比例（`pixels_per_second`），自适应从 `.peak` 文件读取对应精度（每像素对应采样点数），严禁高缩放全景视角下绘制微秒级密度的波形。
-- **Mesh 顶点复用**：
-  - 音频波形绘制统一生成为单个 `egui::Mesh`（三角形条带）；
-  - 在视口未发生平移和缩放、仅播放指针前进时，波形 `Shape::Mesh` 保持完全复用，禁止每一帧重新进行三角形顶点计算。
+- **多级细节（LOD）选择**：根据当前时间轴缩放比例（`pixels_per_second`），自适应从 `.peak` 文件读取对应精度（详见 [`docs/media-pipeline-spec.md` 第 4.4 节](file:///d:/Work/Dev/ClipFlow/docs/media-pipeline-spec.md)），严禁高缩放全景视角下绘制微秒级密度的波形。
+- **Mesh 顶点复用**：音频波形绘制统一生成为单个 `egui::Mesh`（三角形条带）；在视口未发生平移和缩放、仅播放指针前进时，波形 `Shape::Mesh` 保持完全复用，禁止每一帧重新进行三角形顶点计算。
 
 ### 4.3 脏区与按需重绘驱动 (Selective Repaint)
-- **静止状态零开销**：视频暂停且无鼠标悬停、无拖拽时，界面主循环禁止盲目调用 `ctx.request_repaint()`，渲染帧率降为 0 FPS，CPU 占用降为 0%。
-- **播放状态局部化**：播放期间仅触发播放指针（Playhead）与监视器贴图的重绘，轨道底板与未改变的片段静态外框不参与重新栅格化。
+- **静止状态零开销**：视频暂停且无鼠标悬停、无拖拽时，界面主循环禁止盲目调用 `ctx.request_repaint()`，系统挂起于 Windows OS 消息队列，渲染帧率降为 0 FPS，CPU 占用降为 0.0%（详见 [`docs/architecture.md` 第 4.3 节](file:///d:/Work/Dev/ClipFlow/docs/architecture.md) `RepaintScheduler` 规范）。
+- **播放状态局部化**：播放期间仅以 60 FPS 节拍器触发播放指针（Playhead）与监视器贴图的重绘，轨道底板与未改变的片段静态外框不参与重新栅格化。
+
+### 4.4 C1 字幕轨文本排版 Galley 缓存与字形管线 (Subtitle Galley Cache)
+- **字形与几何解耦**：时间轴横向缩放改变的是切片像素外框宽度，文字字号与成型度量（Text Shaping）保持不变。严禁在缩放或重绘时对未修改文字重复调用 `ui.fonts().layout()`。
+- **两级排版缓存机制**：
+  1. 维护固定容量为 **1024 槽位** 的全局 LRU 缓存池 `SubtitleGalleyCache`，以 `(TextString, FontSize, StyleFlag)` 为复合索引键；
+  2. 命中缓存直接获取已生成的 `Arc<egui::Galley>` 句柄并提交 GPU 顶点流，配合 `painter.with_clip_rect(clip_rect)` 硬件裁切溢出文字；
+  3. 缓存命中率红线锁定在 $\ge 99\%$，全屏 60 个词级切片排版耗时从 $2.5\text{ms}$ 骤降至 $\le 0.05\text{ms}$。
+
+### 4.5 高密度关键帧微型手柄交互与拖拽锁定状态机 (Keyframe Drag Lock)
+- **视觉与判定解耦**：音频音量包络线与动效轨道的菱形手柄视觉外径严格保持 **$6\times 6\text{px}$**，逻辑交互判定框（Hitbox）向外等距扩展为 **$14\times 14\text{px}$**。相邻手柄判定区重叠时，以鼠标指针到关键帧时间戳的欧式距离就近吸附。
+- **全局独占拖拽捕获状态机 (`DragLockContext`)**：
+  1. 鼠标在判定区按下（`pointer.primary_down()`）瞬间，全局锁定该手柄唯一标识 `KeyframeHandleId`；
+  2. 拖拽期间激活全屏幕捕获，彻底屏蔽相邻关键帧的 Hover/Click 抢占，仅更新内存瞬态位移预览；
+  3. 鼠标释放（`pointer.primary_released()`）时，计算起止差量，向命令栈打包提交**单次原子化 `ModifyKeyframeCommand`**，杜绝撤销事务栈泛洪。
 

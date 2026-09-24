@@ -108,6 +108,12 @@ flowchart TD
 ### 4.3 全局公用时间线常驻架构 (Global Shared Engine)
 - **状态常驻与单例引用**：`TimelineEngine` 实例不归属于某一个 Page，而是置于主进程根状态 `AppState`（如 `Arc<Mutex<TimelineState>>` 或全局即时状态）。所有工作流页面（Agent、剪辑、动画、声音、图片、导出）在渲染帧均直接绑定并操作同一实例。
 - **时间与音画同步解耦**：底层由全局 `PlaybackManager` 维护主时钟（Master Clock），切换工作流页面仅改变上层辅助视图的挂载与交互侧重点，多轨时间轴视图和音视频硬解播放头连续播放不卡顿、不重构。
+- **重绘调度与零开销待机门控 (`RepaintScheduler`)**：
+  为彻底杜绝即时模式 GUI 无休止空转重绘导致的硬件发热，主事件循环集成三态调度器：
+  1. **`Dormant` (绝对休眠态)**：暂停且无交互超过 150ms，禁止调用任何 `request_repaint()`，线程挂起于 Windows OS 消息队列，CPU 占用降为 **0.0%**；
+  2. **`Playing` (音画播放态)**：仅以显示器垂直同步或 60 FPS 节拍器调用 `request_repaint_after(16.6ms)`，且仅重绘播放头与监视器贴图；
+  3. **`Interacting` (即时交互态)**：拖拽播放头或缩放时，以满刷新率即时响应；
+  4. **跨线程点火唤醒**：后台 Python ASR 片段到达或 FFmpeg 解码就绪时，通过持有的 `egui::Context` 发送单次 `request_repaint()` 穿透唤醒主消息泵。
 
 ---
 

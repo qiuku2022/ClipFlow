@@ -53,8 +53,9 @@ flowchart LR
    - 硬件解码直出格式为 `AV_PIX_FMT_NV12`（Y 亮度单平面 + UV 色度交错平面）。
    - **零 CPU 转换原则**：严禁在 CPU 侧调用 `sws_scale` 将 NV12 转为 RGBA（会导致 4K 高分辨率下 CPU 吞吐暴跌）。直接将 NV12 两个原始内存平面上传至 GPU。
 
-### 2.2 NV12 零拷贝 GPU 纹理上传与 WGSL 着色器
+### 2.2 NV12 双平面 GPU 直接上传与 WGSL 着色器直出
 
+解码器直出的 NV12 数据不经 CPU 像素格式转换，直接通过 PCIe 传输原始双平面数据至 GPU 显存：
 wgpu 端创建两个独立纹理：
 - **`texture_y`**：格式 `wgpu::TextureFormat::R8Unorm`（分辨率 $W \times H$）
 - **`texture_uv`**：格式 `wgpu::TextureFormat::Rg8Unorm`（分辨率 $W/2 \times H/2$）
@@ -193,6 +194,20 @@ $$\text{Time}_{\text{audio}} = \frac{\text{TotalSamplesConsumed}}{\text{SampleRa
 
 - **极速渲染**：40 分钟口播音频的 `.peak` 文件大小仅约为 **1.2 MB**。
 - **UI 绘制映射**：egui 在时间轴上绘制波形时，只需读取可视区域对应区间的 Min/Max 序列，一次性构造为 GPU 三角形网格（`egui::Mesh`），毫秒级 60fps 拖拽无卡顿。
+
+### 4.4 波形 LOD 动态级联与防抖规范 (Waveform LOD & Hysteresis)
+
+为杜绝时间轴连续缩放（Zoom In/Out）期间波形频繁重构造成的掉帧与锯齿跳变闪烁（Aliasing Popping），建立 4 级 LOD 与滞后防抖机制：
+
+1. **4 级 LOD 金字塔划分**：
+   - **LOD 0 (宏观全景)**：$pps < 10.0\text{ px/s}$，单像素代表 2048 采样点；
+   - **LOD 1 (中观概览)**：$10.0 \le pps < 60.0\text{ px/s}$，单像素代表 512 采样点；
+   - **LOD 2 (精细剪辑)**：$60.0 \le pps < 300.0\text{ px/s}$，单像素代表 128 采样点；
+   - **LOD 3 (单帧精修)**：$pps \ge 300.0\text{ px/s}$，单像素代表 32 采样点或直读原始样本。
+2. **$\pm 15\%$ 切换滞后门限（Hysteresis Thresholding）**：
+   - 上升门限与下降门限分离（如 LOD 1 升至 LOD 2 需突破 $65.0\text{ pps}$，降回 LOD 1 需跌破 $55.0\text{ pps}$）。在死区区间内严格保持已有网格，仅做 GPU 矩阵线性拉伸，消除临界震荡。
+3. **`WaveformMeshHolder` 局部保留与复用**：
+   - 时间轴主线程常驻持有当前音轨的 `egui::Mesh` 句柄；在视口未跨级且未超出覆盖时间窗口时，直接复用已有网格，重绘耗时锁定为 $0.0\text{ms}$；仅在跨级时异步构建新网格，单帧构建限额 $\le 0.9\text{ms}$。
 
 ---
 
