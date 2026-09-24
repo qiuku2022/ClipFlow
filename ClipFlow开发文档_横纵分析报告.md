@@ -339,13 +339,14 @@ ClipFlow 的技术拓扑，本质上是在用系统级工程手段，搭建一�
   - **M1/M2 阶段（当前生产级）**：坚决执行**路线 A（稳健底座）**，通过 `PinnedFramePool` 预分配 4KB/64B 对齐的锁页内存，实现 DMA 零堆分配极速直传（上传耗时 $\le 0.8\text{ms}$），配合 `ProxyGovernor` 自适应下采样将拖拽带宽压制在 $\le 60\text{ MB/s}$，确保 100% 内存安全与零闪退；
   - **M4+ 阶段（远期极限储备）**：面向 8 轨 4K 60fps RAW 等极端重载工况，在独立分支预研**路线 C（FFmpeg 原生 D3D12VA 直通）**，共享同一个 `ID3D12Device` 实体，实现真正的同 API 物理零拷贝。详见 [00_审视二多媒体硬解与图形交互性能隐患修复方案_架构总纲.md](file:///d:/Work/Dev/ClipFlow/.local/审视二/00_审视二多媒体硬解与图形交互性能隐患修复方案_架构总纲.md)。
 
-#### 审视 3：音频主时钟阶梯抖动（Staircase Effect）与 cpal WASAPI 的平滑内插
-- **问题与隐患**：
-  文档在 `media-pipeline-spec.md` 第 3.2 节中给出了公式 $\text{Time} = \frac{\text{TotalSamplesConsumed}}{\text{SampleRate}}$。
-  但在现实中，Windows WASAPI 声卡是以缓冲区块（Buffer Block，如每 10ms 一块）交付采样数据的。如果直接拿这个采样游标作为主时钟，时钟会呈现每 10ms 突跳一次的“阶梯状”，导致 16.6ms（60fps）的视频渲染线程发生微观顿挫（Micro-stuttering）。
+#### 审视 3：音频主时钟离散拍频顿挫与 WASAPI 硬件单调箝位外推破局
+- **问题透视与伪命题剥离**：
+  原文档在 `media-pipeline-spec.md` 第 3.2 节中给出的离散公式 $\text{Time} = \frac{\text{TotalSamplesConsumed}}{\text{SampleRate}}$，会导致 Windows WASAPI 10ms 缓冲区跳变与 60/120 FPS 视频刷新之间产生拍频阶梯抖动。然而，此前关于“自研温漂低通滤波 / 软件锁相环（PLL）校准 10~50 ppm 温漂”的主张属于脱离硬件特性的典型伪命题（温漂每秒仅 0.05ms，软滤波会引入致命的相位滞后与切口脱节）；同时“两次音频回调间裸写 QPC 增量”在音频短时欠载恢复时会引发灾难性的**“时间倒流（Time Inversion）”**与画面抽搐。
 - **优化与修正建议**：
-  必须在文档中明确引入**“QPC 高精度线性内插时钟器”**：
-  在两次音频回调之间，查询主时钟时必须叠加当前 Windows `QueryPerformanceCounter` 产生的高精度微秒级增量，消除阶梯跳变；同时设计低通滤波器校准声卡硬件晶振与 CPU 单调时钟之间的固有温漂（10~50 ppm）。
+  确立**“WASAPI 原生 `IAudioClock` 硬件游标锚定 + `MonotonicClampedClock` 无锁单调箝位平滑外推器 + 双阈值迟滞渲染判定”**的生产级架构：
+  1. 底层调用 `IAudioClock::GetPosition` 硬件原子捕获 DAC 物理播放采样点与系统 QPC，动态测定硬件 FIFO 排队延迟；
+  2. 上层使用 SeqLock 双缓冲与 CAS 单调过滤，限制最大外推跨度 $\le 1.5\times$ 周期（15ms），保证时钟输出绝对单调递增，彻底根除时间倒流；
+  3. 引入双阈值迟滞比较器（8ms 进入 / 12ms 退出）与 VSync 前瞻半帧，将微抖动压制在 $\le 0.05\text{ms}$，音画长效漂移锁定在 $\le 2.0\text{ms}$。详见 [00_审视三高精度主时钟与音画同步性能隐患修复方案_架构总纲.md](file:///d:/Work/Dev/ClipFlow/.local/审视三/00_审视三高精度主时钟与音画同步性能隐患修复方案_架构总纲.md)。
 
 #### 审视 4：HyperFrames Node.js Headless Chromium 显存泄漏与滚动重启
 - **问题与隐患**：
@@ -398,7 +399,7 @@ graph TD
 
 #### 剧本三：范式跃迁，定义新一代开源 Agent-Native 创作工作台（最乐观的卓越剧本）
 - **发生路径**：
-  团队敏锐采纳审查建议，在 M1 提前引入视口裁剪与平滑主时钟，在 M2 坚决打通 FCPXML 行业互通，并攻克了 wgpu-hal 跨 API 零拷贝纹理共享；HyperFrames 的 Web 代码动效库在开源社区形成强大的模板生态圈，第三方开发者为 ClipFlow 贡献了数以千计的 Agent 动效组件。
+  团队敏锐采纳审查建议，在 M1 提前引入视口裁剪与 WASAPI 无锁单调箝位平滑主时钟，在 M2 坚决打通 FCPXML 行业互通，并在远期攻克了 FFmpeg 9.0.2 原生 D3D12VA 同 API 零拷贝硬件直通（路线 C）；HyperFrames 的 Web 代码动效库在开源社区形成强大的模板生态圈，第三方开发者为 ClipFlow 贡献了数以千计的 Agent 动效组件。
 - **终局状态**：
   ClipFlow 成为全球第一款真正跑通“大模型代码生成动效 + 导演级智能规划 + 工业级底层控制力”的标杆级开源桌面系统。不仅吞食了 Descript 的存量市场，更倒逼 Adobe 和 Blackmagic Design 重新审视自身的架构设计，完成了一次从边缘突围到定义行业下一代技术标准的壮举。
 
@@ -415,8 +416,9 @@ graph TD
    - 明确废除基于 `wgpu-hal` 跨 API 共享（路线 B）的过度设计；
    - 在 `media-pipeline-spec.md` 中全面落实路线 A（`PinnedFramePool` 锁页环形池 + NV12 双平面极速上传 + WGSL 全色域自适应色彩矩阵），结合 `ProxyGovernor` 自适应下采样将总线峰值锁定在 $\le 60\text{ MB/s}$；
    - 远期将路线 C（FFmpeg 9.0.2 D3D12VA 同 API 原生零拷贝）确立为 M4+ 极限重载储备。
-3. **完善主时钟平滑插值与锁相环算法定义**：
-   - 在音频时钟章节中，补充基于 Windows QPC 单调时钟对声卡 10ms 缓冲区进行微秒级线性内插的状态机规范，杜绝画面阶梯微抖。
+3. **确立 WASAPI 硬件 DAC 锚定与无锁单调箝位主时钟规约**：
+   - 彻底废除脱离硬件的自研温漂滤波与软件锁相环（PLL）过度设计；
+   - 在 `media-pipeline-spec.md` 中全面落实 `WasapiHardwareAnchor` 硬件锚定、`MonotonicClampedClock` 无锁单调箝位外推与 `HysteresisSyncComparator` 双阈值迟滞比较，杜绝时间倒流与拍频顿挫。
 4. **确立 HyperFrames 无头集群滚动重启机制**：
    - 在 `hyperframes-spec.md` 中增加 Headless Chromium 实例池管理规约，严格执行每 400 帧无状态滚动重启，杜绝离屏渲染内存泄漏。
 5. **前置 FCPXML / EDL 行业标准工程交换里程碑**：

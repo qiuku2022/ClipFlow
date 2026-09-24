@@ -120,6 +120,12 @@ flowchart TD
 - **自适应流控与背压调度**：集成 `ProxyGovernor` 调度器，快速拖拽时自动切入 1/4 代理（540P），总线带宽锁定在 $\le 60\text{ MB/s}$，拖拽延迟 $\le 25\text{ms}$；队列深度 $\le 3$ 背压控制防止内存堆积；
 - **三级容灾与 DeviceLost 无感自愈**：硬件解码在 D3D11VA $\to$ DXVA2 $\to$ 多线程 CPU 软解间平滑降级；DirectX 显卡驱动 TDR 超时或设备丢失时在 100ms 内无感重建管线，保证工程与编辑状态 100% 留存。
 
+### 4.5 高精度主时钟与音画同步解耦架构 (`MasterClockProvider`)
+- **时钟契约抽象与多态解耦**：定义 `MasterClockProvider` Trait，将主时钟与特定音频驱动彻底解耦。支持 `AudioMaster`（默认 cpal/WASAPI）、`DisplayMaster`（VSync 前瞻微重采样锁相）与 `DeterministicExport`（离线母带导出单步时钟）三态无缝切换；
+- **无锁单调箝位主时钟 (`MonotonicClampedClock`)**：底层通过 WASAPI `IAudioClock::GetPosition` 硬件锁存 DAC 物理样本计数值与系统 QPC 时间戳，消除静态时延估算误差；上层采用 SeqLock 双缓冲与 CAS 单调过滤，限制最大外推跨度 $\le 1.5\times$ 周期（15ms），保证时钟输出绝对单调递增，彻底杜绝音频欠载补发时产生的“时间倒流（Time Inversion）”与监视器抽搐；
+- **双阈值迟滞比较与前瞻锁相 (`HysteresisSyncComparator`)**：引入施密特触发器回线（$[-8\text{ms}, +8\text{ms}]$ 恢复锁定，$|\Delta t| > 12\text{ms}$ 退出调整），叠加 8.33ms VSync 垂直刷新半帧前瞻，彻底抹平 10ms 缓冲区离散阶梯拍频顿挫；
+- **高频运控门控与设备自愈看门狗**：高频拖拽（Scrubbing）期间时钟物理冻结在手动目标位置，释放鼠标瞬间原子重置时钟基准；100ms 心跳看门狗监控声卡健康度，在设备拔出或驱动断连时无缝降级为基于纯 QPC 的逻辑单调时钟，主视窗保持丝滑拖拽与剪辑，绝不闪退。
+
 ---
 
 ## 5. 导演级 Agent 工作流与协同机制

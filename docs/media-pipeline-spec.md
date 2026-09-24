@@ -134,50 +134,72 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 人耳对声音的卡顿、爆音和断续容忍度极其苛刻（$\ge 5\text{ms}$ 的突变即可察觉），而人眼对视频画面轻微的帧等待或丢帧具有自然融合容忍度。因此，**系统时钟严格以音频消费游标作为 Master Clock**。
 
-### 3.2 采样点基准时钟计算
+### 3.2 WASAPI 硬件 DAC 时钟锚定与动态时延补偿 (`WasapiHardwareAnchor`)
 
-通过 `cpal` 音频驱动设备回调：
+通过 Windows 原生 WASAPI `IAudioClock` 驱动接口实现硬件级时钟捕获：
+1. **硬件原子锁存**：在驱动音频回调中断中，调用 `IAudioClock::GetPosition(&device_pos, &qpc_pos)`，同时捕获当前 DAC 物理播放采样点绝对计数 $P_{\text{hw}}$ 与 CPU 系统单调计数器 $QPC_{\text{hw}}$；
+2. **DAC 真实播放时间戳计算**：
+   $$T_{\text{dac\_ns}} = \left( \frac{P_{\text{hw}}}{F_{\text{hw}}} \times 10^9 \right) \text{ ns}$$
+3. **硬件排队滞后动态测定**：
+   测定声卡环形 FIFO 中已写入但尚未转换发声的排队样本时延：
+   $$D_{\text{latency\_ns}} = \left( \frac{S_{\text{written}} - P_{\text{hw}}}{F_{\text{hw}}} \times 10^9 \right) \text{ ns}$$
+   彻底废除静态常量估算，确保蓝牙耳机、USB 监听声卡与板载声卡在各异缓冲深度下均实现唇音毫秒级绝对对齐。
 
-$$\text{Time}_{\text{audio}} = \frac{\text{TotalSamplesConsumed}}{\text{SampleRate}} + \text{DeviceOutputLatency}$$
+### 3.3 无锁原子单调箝位外推主时钟 (`MonotonicClampedClock`)
 
-- `SampleRate` 统一在主混音器重采样为 **48000 Hz 32-bit Float**。
-- `DeviceOutputLatency` 动态查询 Windows WASAPI 驱动缓冲时延（一般为 5ms ~ 15ms）。
+为解决声卡 10ms 离散缓冲区交付与 60/120 FPS 连续渲染之间的拍频顿挫，构建无锁单调箝位外推引擎：
 
-### 3.3 视频渲染决策状态机
+1. **SeqLock 双缓冲无锁数据结构**：
+   底层使用 64 字节缓存行对齐的 `ClockAnchor` 双缓冲区，音频回调线程通过原子递增版本号发布最新锚点，UI 渲染线程无锁读取，查询耗时死锁在 $\le 15\text{ns}$；
+2. **外推上限箝位（Clamp）**：
+   当前时刻物理流逝 $\Delta t_{\text{elapsed}} = QPC(t) - QPC_{\text{anchor}}$。为防止音频欠载时时钟无限狂奔，施加外推硬顶约束：
+   $$\Delta t_{\text{clamped}} = \max\left(0, \min\left(\Delta t_{\text{elapsed}}, 1.5 \times T_{\text{period}}\right)\right) \quad (\le 15\text{ms})$$
+3. **CAS 绝对单调过滤（杜绝时间倒流）**：
+   $$T_{\text{output}}(t) = \max\left(T_{\text{last\_output}}, T_{\text{dac\_base}} + \Delta t_{\text{clamped}}\right)$$
+   通过原子 CAS 写入 `last_output_ns`。即使音频系统发生短时卡顿并在滞后补发数据，时钟绝对单调递增，物理上彻底杜绝时间倒流（Time Inversion）引发的画面抽搐。
 
-在主线程每次执行画面重绘时，比对当前待显示视频帧的显示时间戳 $PTS_{\text{video}}$ 与 $\text{Time}_{\text{audio}}$ 的差值 $\Delta t = PTS_{\text{video}} - \text{Time}_{\text{audio}}$：
+### 3.4 视频渲染双阈值迟滞决策与 VSync 前瞻调度 (`HysteresisSyncComparator`)
+
+废除脆弱的单点固定阈值判定，引入具备施密特触发器特性的双阈值迟滞状态机：
 
 ```
-                    ┌────────────────────────┐
-                    │      计算偏差 Δt       │
-                    │  PTS_video - Time_clk  │
-                    └───────────┬────────────┘
-                                │
-        ┌───────────────────────┼───────────────────────┐
-        ▼                       ▼                       ▼
-  Δt > +10ms              -10ms ≤ Δt ≤ +10ms       Δt < -10ms
- 视频跑得太快                 【理想同步区】            视频严重滞后
-        │                       │                       │
-        ▼                       ▼                       ▼
-【等待策略 (Hold)】        【渲染本帧 (Render)】     【追赶/丢帧策略】
-本帧暂不上屏，保持上一帧，   上传贴图并推进帧队列     │
-等待音频时钟追上                                      ├─ -40ms ≤ Δt < -10ms:
-                                                      │  立即渲染，不延时
-                                                      └─ Δt < -40ms:
-                                                         直接丢弃当前帧，连续
-                                                         读取下一帧直到对齐
+       同步状态决策迟滞回线 (Hysteresis Loop):
+
+               Hold 等待状态 (视频过快, Δt > 0)
+                      ▲                │
+        退出阈值 +12ms │                │ 恢复阈值 +8ms
+                      │                ▼
+      ────────────────┴─────────────────────────── 保持理想同步 (InLock)
+                      ▲                │
+        恢复阈值 -8ms │                │ 退出阈值 -12ms
+                      │                ▼
+               追赶/丢帧状态 (视频滞后, Δt < 0)
 ```
 
-### 3.4 变速播放与快速拖拽 (Scrubbing) 处理
+1. **VSync 垂直同步半帧前瞻**：
+   预测监视器物理光栅化上屏时刻的时间差：
+   $$\Delta t = PTS_{\text{video}} - \left( T_{\text{clk\_now}} + T_{\text{vsync\_forward}} \right) \quad (T_{\text{vsync\_forward}} = 8.33\text{ms} @ 60\text{Hz})$$
+2. **双阈值迟滞决策逻辑**：
+   - **锁定态维持（`InLock`）**：当前处于锁定态时，只有偏差穿透外部阈值 $|\Delta t| > 12\text{ms}$ 才退出锁定；在 $[ -12\text{ms}, +12\text{ms} ]$ 死亡区间内平稳维持 `RenderCurrentFrame`，消除拍频跳变引起的微观顿挫；
+   - **锁定态恢复**：处于调整态时，偏差必须收敛至 $|\Delta t| \le 8\text{ms}$ 才重新切入锁定；
+   - **超差调整策略**：
+     - $\Delta t > +12\text{ms}$：【Hold 等待态】保持上一帧画面，当前帧推迟上屏；
+     - $-40\text{ms} \le \Delta t < -12\text{ms}$：【轻度滞后追赶】立即渲染上屏，不插入等待；
+     - $\Delta t < -40\text{ms}$：【严重滞后丢帧】直接丢弃当前帧，连续读取下一帧直至对齐。
 
-- **快速拖拽播放头时**：
-  1. 瞬间停止音频播放并清空音频 RingBuffer。
-  2. 解码管线切换为“快速寻帧（Fast Seek）”模式：仅解码临近的 I/IDR 关键帧与目标帧，其余 B/P 帧跳过计算。
-  3. 停止拖拽（Mouse Release）后，以释放点所在帧为基准重新启动音频硬件流。
-- **变速播放 (0.5x ~ 2.0x)**：
-  - 音频流经由 WSOLA（Waveform Similarity Overlap-Add）变调不变速算法实时重采样处理，确保音频语调正常。
+### 3.5 非编剪辑运控瞬态门控与音频看门狗 (`TransportController`)
 
-### 3.5 监视器自适应下采样流控调度器 (`ProxyGovernor`) 与背压控制
+针对剪辑交互工况，建立严格的运控状态机与设备容灾体系：
+
+1. **四态运控状态机**：
+   - **`Playing`**：正常播放，单调箝位外推时钟全开；
+   - **`Paused`**：静止停顿，时钟物理冻结在 $T_{\text{pause}}$，阻断 QPC 外推；
+   - **`Scrubbing`**：鼠标高速拖拽时间轴（1000Hz 轮询），时钟直接映射鼠标目标时间码，底层外推暂停，全链路拖拽呈现延迟控制在 $\le 25\text{ms}$；
+   - **`Seeking`**：跳帧寻道过渡态，排空音频残留缓冲，释放鼠标瞬间原子重置底层时钟锚点，杜绝积压数据导致起跑跳帧。
+2. **音频自愈看门狗 (Heartbeat Watchdog)**：
+   UI 线程每帧监控音频回调时间戳。若超过 $100\text{ms}$ 未收到心跳（驱动欠载或设备拔出），自动触发无缝降级：主时钟切换为基于系统 QPC 的纯单调逻辑时钟，音频管线安全静音，主视窗保持丝滑拖拽与剪辑，绝不发生主进程未响应或闪退。
+
+### 3.6 监视器自适应下采样流控调度器 (`ProxyGovernor`) 与背压控制
 
 为避免在常规小面积监视器视口中盲目上传 4K 60fps 原图造成总线竞争，并保证高速拖拽时毫秒级跟手响应，集成三态自适应流控调度器：
 
