@@ -1,5 +1,12 @@
 # 打包分发与更新方案 (Packaging & Release)
 
+> **版本**：v1.0.0  
+> **更新时间**：2026-09-26  
+> **适用技术栈**：Rust 1.98, Python 3.13, Node.js 24 LTS, FFmpeg 9.0.2, NSIS, signtool  
+> **核心地位**：规范 Windows 端复合多运行时目录布局、分级安装包（Lite/Full）编排、NSIS 打包脚本、代码签名与静默热更新机制。
+
+---
+
 ## 1. 交付形态与发布目标 (Tiered Packaging)
 
 为了彻底解决“Python + CUDA + Node + FFmpeg”复合架构导致的 3GB+ 体积黑洞，系统提供两种发布形态：

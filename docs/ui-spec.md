@@ -1,7 +1,9 @@
 # ClipFlow UI 设计规范与视觉体系 (UI Specification)
 
-> **设计基准**：采用来自 OpenDesign 的 **Neutral Modern 深色设计体系 (Neutral Modern Dark Mode)**。  
-> **核心定位**：以“沉静内敛、内容优先、精密工控 (Calm, Functional, Quietly Confident)”为核心哲学。以深岩灰底板 (`#0F1115`)、分层中性表面 (`#171A21` / `#1E222B`)、精密发丝边框 (`#2A2F3A`) 与极度克制的钴蓝交互信号 (`#2F6FEB`)，构建兼顾广播级暗房色彩还原、长时间剪辑无视觉疲劳与现代产品质感的专业桌面音视频工作台。
+> **版本**：v1.0.0  
+> **更新时间**：2026-09-26  
+> **适用技术栈**：Rust 1.98, egui 0.36, egui_wgpu, wgpu 30.0, OpenDesign Neutral Modern Dark  
+> **核心地位**：规范全系统视觉基调、工业级圆角梯队、Neutral Modern 色彩 Tokens、字体排版层级、核心控件样式与专业非编多轨时间轴专属色谱。
 
 ---
 

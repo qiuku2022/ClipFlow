@@ -1,7 +1,7 @@
 # HyperFrames 动效引擎集成规范 (HyperFrames Motion Engine Specification)
 
 > **版本**：v1.0.0  
-> **更新时间**：2026-09-23  
+> **更新时间**：2026-09-26  
 > **适用技术栈**：Node.js 24 LTS, Headless Chromium (CDP / Playwright Core), GSAP 3.12, Rust 1.98  
 > **核心地位**：定义 ClipFlow“代码化动态包装”标准——基于 Web 技术栈（HTML/CSS/JS/GSAP）构建 Agent 友好、逐帧确定性渲染的透明通道动态图层，并无缝合成至时间轴。
 

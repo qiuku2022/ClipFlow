@@ -1,6 +1,9 @@
 # 剪辑工作台界面布局规范 (Edit Layout Specification)
 
-本文档依据实测 Adobe Premiere Pro 经典四区分屏工作区（参考原图见 [docs/assets/pr-reference.png](file:///d:/Work/Dev/ClipFlow/docs/assets/pr-reference.png)），针对 ClipFlow **“Rust 1.98 + wgpu 30.0 + egui 0.36”** 技术底座及 **[Neutral Modern 深色设计体系 (ui-spec.md)](file:///d:/Work/Dev/ClipFlow/docs/ui-spec.md)**（深岩灰底板 `#0F1115`、面板表面 `#171A21`、钴蓝信号 `#2F6FEB`、12px/8px/4px 几何圆角梯队）制定的剪辑页面布局标准。
+> **版本**：v1.0.0  
+> **更新时间**：2026-09-26  
+> **适用技术栈**：Rust 1.98, egui 0.36, wgpu 30.0, FFmpeg 9.0.2, Neutral Modern Dark  
+> **核心地位**：依据 Adobe Premiere Pro 经典四区分屏格局，规范 ClipFlow 剪辑主工作台网格拓扑、视窗尺寸约束、公用时间线交互与状态机联动。
 
 ---
 
@@ -224,7 +227,7 @@ flowchart TD
   1. **字幕与台词轨 (`C1`)**：
      - 锁轨开关、眼球可见性开关、`Subtitle` 标签。
      - 放置由 `faster-whisper 1.2.1` 自动转写并断句的字幕片段。
-     - 片段采用金橙色背景（`#3D3418`），直接显示台词文字（如“1973年”、“美国的加油站外”、“排起了长队”）。
+     - 片段采用暗暖金棕底色（`#271F12` / 描边高亮 `#63471C`），直接显示台词文字（如“1973年”、“美国的加油站外”、“排起了长队”）。
   2. **高阶视频轨 (`V3` / `V2`)**：
      - 锁轨、可见性。
      - 放置 **HyperFrames 动效渲染层**（角标、花字、数据图表动画）及 画中画 / 贴图素材。

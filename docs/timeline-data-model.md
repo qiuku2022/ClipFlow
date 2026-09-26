@@ -1,7 +1,7 @@
 # 时间轴数据模型与工程持久化规范 (Timeline Data Model & Project Format)
 
 > **版本**：v1.0.0  
-> **更新时间**：2026-09-23  
+> **更新时间**：2026-09-26  
 > **适用技术栈**：Rust 1.98 (MSVC), serde 1.0, zstd 0.13  
 > **核心地位**：ClipFlow 全局时间轴单一事实来源（SSOT）的 Rust 内部数据结构、命令模式事务、亚毫秒时间计算与 `.clipflow` 工程存储标准。
 
@@ -642,7 +642,7 @@ impl TimelineHistory {
 +-------------------------------------------------------------------------+
 | Payload SHA-256 Checksum: [u8; 32]                                      | 32 字节
 +-------------------------------------------------------------------------+
-| Compressed Data Stream (Zstandard 压缩的 CBOR 或 JSON 序列化体)           | 可变长
+| Compressed Data Stream (Zstandard 压缩的 JSON 序列化体, zstd 0.13)         | 可变长
 +-------------------------------------------------------------------------+
 ```
 
@@ -657,7 +657,7 @@ impl TimelineHistory {
 ### 4.3 自动保存与预写日志 (Auto-Save & WAL)
 
 - **防崩溃日志 (WAL)**：每执行一次 `TimelineCommand`，主进程以追加写入（Append-only）形式向临时工作目录记录 `session.wal`。
-- **定时全量快照**：每隔 3 分钟后台静默序列化一份全量工程至 `.clipflow_autosave/project_timestamp.clipflow`，最大保留 10 份历史快照。
+- **定时全量快照**：每隔 3 分钟后台静默序列化一份全量工程至第一轨本地缓存目录 `.clipflow_cache/{ProjectHash}/autosave/{Name}_{YYYYMMDD_HHMMSS}.clipflow`（详见 [`cache-and-storage-spec.md` 第 2 节](file:///d:/Work/Dev/ClipFlow/docs/cache-and-storage-spec.md#L41)），最大保留 10 份历史快照。
 - **异常恢复检测**：启动时如检测到异常退出遗留的 WAL 日志，弹出对话框提示用户“检测到未保存的工程修改，是否一键恢复”。
 
 ---

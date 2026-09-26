@@ -1,8 +1,19 @@
 # 进程间通信与接口协议 (IPC Protocol)
 
+> **版本**：v1.0.0  
+> **更新时间**：2026-09-26  
+> **适用技术栈**：Rust 1.98 (Host), Python 3.13 (`uv`), Node.js 24 LTS, Win32 Named Pipes, JSON-RPC 2.0  
+> **核心地位**：规范主进程与 Python 计算子进程、Node.js 动效渲染子进程之间的生命周期管控、管道通信契约、心跳租约与三级容灾自愈协议。
+
+---
+
 ## 1. 概述与通信信道架构
 
 - **内核级生命周期约束**：所有派生的 Python 和 Node.js 子进程，在创建时必须以 `CREATE_SUSPENDED` 状态原子化纳入 Windows **`Job Object`**（配置 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`），确保宿主主进程发生任何异常终止时，内核级联强杀整棵子孙进程树，孤儿逃逸率严格为 **$0.0\%$**。
+- **架构职责边界**：
+  - **Agent 导演大模型**：由 Rust 宿主主进程通过标准 HTTP 客户端直接调用外部 OpenAI/Claude 兼容 API，无需经由 Python 中转；
+  - **Python 智能计算 Worker**：专注于本地密集计算（faster-whisper 1.2.1 ASR 转写、VAD 气口能量分析与口播切分推荐）；
+  - **HyperFrames 动效渲染 Worker**：专注于离屏确定性渲染，通过命名共享内存（零拷贝）直传实时预览帧，离线烘焙模式通过命名管道驱动。
 - **Rust 主进程 (Coordinator)** $\longleftrightarrow$ **Python 智能子进程 (ASR/NLP Worker)**
   - **信令信道 (信道 A)**：Windows 异步双工命名管道（`\\.\pipe\clipflow-py-{pid}`），采用 Overlapped I/O 与标准换行符分隔的 **JSON-RPC 2.0** 协议，控制往返耗时 RTT $\le 0.35\text{ms}$。
   - **日志排水管线 (信道 B)**：独立非阻塞管道实时读取子进程标准错误（`stderr`），由 Tokio 异步任务持续流式排空，彻底杜绝 MSVCRT 4KB 块缓冲死锁，并将日志结构化注入 Rust `tracing` 集中落盘。
