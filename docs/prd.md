@@ -45,12 +45,12 @@
 
 | 页面 | 设计基准 | 核心职责与布局要求 |
 | :--- | :--- | :--- |
-| **Agent** | 核心特色 | **导演工作台**：全局剪辑方案规划、用户交互对话（Prompt）、剧本/大纲解析、镜头清单推荐、自动化执行进度流与方案微调。 |
-| **剪辑** | **完全对齐 Premiere Pro (PR)** | **经典专业非编布局**：<br>1. **左上/左侧**：项目素材面板 (Project Panel) 与 效果控件 (Effect Controls)<br>2. **中上**：源监视器 (Source Monitor) 与 节目监视器 (Program Monitor)<br>3. **右侧**：工具箱 (Tools) 与 音频电平表 (Audio Meters)<br>4. **下方**：即公用时间线（展开 PR 级精细多轨工具与标尺）。 |
-| **动画** | 继承 HyperFrames | **代码化视频动效工作台**：内置基于 HTML/CSS/JS 的动效组件库、代码实时编辑器、逐帧预览窗与动效图层参数绑定。 |
-| **声音** | 待定 | 音频微调、波形精修、降噪、自动 BGM 选配与音频对齐。 |
-| **图片** | 待定 | 视觉资产库管理、AI 生图/扩图/垫图、封面图制作。 |
-| **导出** | 待定 | 导出预设（分辨率/码率/编码器）、批量渲染队列、硬件加速状态监视。 |
+| **Agent** | 核心特色 | **导演工作台**：全局剪辑方案规划、用户交互对话（Prompt）、剧本/大纲解析、镜头清单推荐、自动化执行进度流与方案微调（详见 [`agent-director-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/agent-director-spec.md)）。 |
+| **剪辑** | **完全对齐 Premiere Pro (PR)** | **经典专业非编两层分屏**：<br>1. **上半屏**：左侧 25% 项目素材面板与效果树、中侧 50% 源监视器与节目监视器、右侧 25% 效果控件与纵向立体声电平表；<br>2. **下半屏**：100% 满宽常驻多轨时间线与左侧 32px 紧凑工具条（详见 [`edit-layout-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/edit-layout-spec.md)）。 |
+| **动画** | 继承 HyperFrames | **代码化视频动效工作台**：内置基于 HTML/CSS/JS 的动效组件库、代码实时编辑器、无头 Chromium 离屏确定性渲染与命名共享内存直传（详见 [`hyperframes-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/hyperframes-spec.md)）。 |
+| **声音** | 参考专业 DAW / Fairlight | **音频精修与混音台**：多轨通道条混音台 (Mixer Strip)、4 段参量均衡器 (EQ)、单旋钮 AI 智能降噪、瞬态电平与实时响度计 (LUFS Radar) 及时间线音量包络手柄（详见 [`workflow-pages-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/workflow-pages-spec.md)）。 |
+| **图片** | 视觉资产与封面制作 | **资产库与封面排版工作区**：静态图片与 B-Roll 管理、一键截帧定格底图、90% 平台 UI 避让安全框及封面大标题排版（详见 [`workflow-pages-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/workflow-pages-spec.md)）。 |
+| **导出** | 多平台硬件分发 | **母带渲染与分发工作台**：多平台常用预设库（B站/抖音/YouTube/ProRes）、成片监视器走带、离屏非阻塞渲染队列与 FFmpeg NVENC 硬件编码监视（详见 [`workflow-pages-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/workflow-pages-spec.md)）。 |
 
 ---
 

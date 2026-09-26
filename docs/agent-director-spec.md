@@ -103,7 +103,7 @@ ClipFlow 支持本地大模型与主流云端 API，统一在主进程安全配�
 Agent 操作公用时间线时，必须且仅能通过以下结构化工具调用。
 
 > **时间轴防腐层契约 (ACL Guardrail)**：  
-> 工具调用参数与外部通信协议中声明的所有时间参数（如 `start_time_seconds`, `duration_seconds`）统一使用人类与 LLM 习惯的十进制浮点秒（`f64`）。当指令被传递至 Rust 时间轴引擎时，**统一由 `AgentTimelineAcl`（详见 [`timeline-data-model.md` 第 1.4 节](file:///d:/Work/Dev/ClipFlow/docs/timeline-data-model.md) 与 [`01_Agent时间轴防腐层与帧吸附量化规范.md`](file:///d:/Work/Dev/ClipFlow/.local/remediation_plan/01_Agent%E6%97%B6%E9%97%B4%E8%BD%B4%E9%98%B2%E8%85%90%E5%B1%82%E4%B8%8E%E5%B8%A7%E5%90%B8%E9%99%84%E9%87%8F%E5%8C%96%E8%A7%84%E8%8C%83.md)）在进入事务命令栈前执行严格的帧网格硬吸附（`RationalTime`）与 $\le 1$ 帧微隙自动缝合**，保证切片空洞坏帧率严格为 0。
+> 工具调用参数与外部通信协议中声明的所有时间参数（如 `start_time_seconds`, `duration_seconds`）统一使用人类与 LLM 习惯的十进制浮点秒（`f64`）。当指令被传递至 Rust 时间轴引擎时，**统一由 `AgentTimelineAcl`（详见 [`timeline-data-model.md` 第 1.4 节](file:///d:/Work/Dev/ClipFlow/docs/timeline-data-model.md#L130)）在进入事务命令栈前执行严格的帧网格硬吸附（`RationalTime`）与 $\le 1$ 帧微隙自动缝合**，保证切片空洞坏帧率严格为 0。
 
 ### 3.1 工具清单定义 (JSON Schema)
 

@@ -19,6 +19,7 @@
 #### 请求 (Rust $\to$ Python)
 ```json
 {
+  "jsonrpc": "2.0",
   "id": "req-1001",
   "method": "asr.transcribe",
   "params": {
@@ -32,13 +33,24 @@
 
 #### 响应 (Python $\to$ Rust)
 ```json
+// 成功响应 (符合 JSON-RPC 2.0 规范，以 result 承载数据)
 {
+  "jsonrpc": "2.0",
   "id": "req-1001",
-  "status": "success",
-  "data": {
+  "result": {
     "task_id": "task-asr-20260923-01",
     "audio_duration_s": 320.5,
     "chunk_count_estimated": 160
+  }
+}
+
+// 异常响应示例 (以 error 承载错误码与信息)
+{
+  "jsonrpc": "2.0",
+  "id": "req-1001",
+  "error": {
+    "code": -32001,
+    "message": "CUDA out of memory, fallback to CPU triggered"
   }
 }
 ```
@@ -90,8 +102,7 @@
 {
   "jsonrpc": "2.0",
   "id": "req-1003",
-  "status": "success",
-  "data": {
+  "result": {
     "task_id": "task-asr-20260923-01",
     "processed_chunks": 12,
     "processed_duration_s": 24.0,
@@ -106,6 +117,7 @@
 ```json
 // 请求
 {
+  "jsonrpc": "2.0",
   "id": "req-1002",
   "method": "speech.analyze_cuts",
   "params": {
@@ -117,9 +129,9 @@
 
 // 响应
 {
+  "jsonrpc": "2.0",
   "id": "req-1002",
-  "status": "success",
-  "data": {
+  "result": {
     "suggested_cuts": [
       {
         "type": "silence",
@@ -149,7 +161,7 @@
 
 ## 3. Rust 与 HyperFrames 动效渲染协同规范 (Dual-Mode Motion Protocol)
 
-系统确立**“在线动态流式合成为主、按需离线烘焙为辅”**的双模调度架构（详见 [02_HyperFrames双模动效流式直传与离线烘焙规范.md](file:///d:/Work/Dev/ClipFlow/.local/remediation_plan/02_HyperFrames%E5%8F%8C%E6%A8%A1%E5%8A%A8%E6%95%88%E6%B5%81%E5%BC%8F%E7%9B%B4%E4%BC%A0%E4%B8%8E%E7%A6%BB%E7%BA%BF%E7%83%98%E7%84%99%E8%A7%84%E8%8C%83.md)）：
+系统确立**“在线动态流式合成为主、按需离线烘焙为辅”**的双模调度架构（详见 [hyperframes-spec.md 第 1 节与第 3 节](file:///d:/Work/Dev/ClipFlow/docs/hyperframes-spec.md)）：
 
 ### 3.1 模式 A（默认）：在线动态流式合成 (`StreamingSharedMemory`)
 * **适用场景**：日常时间轴交互编辑、实时走带预览、以及 ClipFlow 内部母带直接导出。
@@ -163,21 +175,26 @@
 * **IPC 下发协议**：
 ```json
 {
-  "task_id": "7b1f6d90-3482-4d2a-8d82-9f37213b1a20",
-  "template_id": "lower_third_minimal",
-  "mode": "OfflineBakeFile",
-  "props": {
-    "title": "ClipFlow 导演级剪辑 Agent",
-    "subtitle": "自动化口播剪辑与动效渲染",
-    "duration_frames": 150,
-    "fps": 30,
-    "width": 1920,
-    "height": 1080
-  },
-  "bake_config": {
-    "output_path": "D:/Cache/Render/anim_001.mov",
-    "output_codec": "prores_ks",
-    "pix_fmt": "yuva444p10le"
+  "jsonrpc": "2.0",
+  "id": "req-2001",
+  "method": "motion.bake_offline",
+  "params": {
+    "task_id": "7b1f6d90-3482-4d2a-8d82-9f37213b1a20",
+    "template_id": "lower_third_minimal",
+    "mode": "OfflineBakeFile",
+    "props": {
+      "title": "ClipFlow 导演级剪辑 Agent",
+      "subtitle": "自动化口播剪辑与动效渲染",
+      "duration_frames": 150,
+      "fps": 30,
+      "width": 1920,
+      "height": 1080
+    },
+    "bake_config": {
+      "output_path": "D:/Cache/Render/anim_001.mov",
+      "output_codec": "prores_ks",
+      "pix_fmt": "yuva444p10le"
+    }
   }
 }
 ```
@@ -195,10 +212,10 @@
 
 ### 4.2 长任务分片进度租约契约 (Progress Lease)
 - **租约签发**：主进程下发 ASR 或长视频分析任务时，签发初始租约 $L_{\text{expire}} = t_{\text{now}} + W_0$（$W_0 = 3.5\text{s}$）；
-- **动态续约**：子进程采用流式分片模式（约每 2.0s 音频输出一个 `asr.segment` 事件）。主进程每收到一个分片事件，基于当前单片耗时与安全抖动因子（$\alpha = 3.0$）原子更新租约到期时间戳：
+- **动态续约**：子进程采用流式分片模式（约每 2.0s 音频输出一个 `asr.chunk_stream` 流式事件）。主进程每收到一个分片事件，基于当前单片耗时与安全抖动因子（$\alpha = 3.0$）原子更新租约到期时间戳：
   $$L_{\text{expire}} = t_{\text{now}} + \max(d_{\text{chunk}} \times \text{RTF} \times 3.0 + 1.5\text{s}, \; 2.0\text{s})$$
 - **死锁判定**：后台看门狗每 200ms 执行无锁检查，仅在 $t_{\text{now}} > L_{\text{expire}}$ 时判定为计算挂起/GIL 锁死，死锁误杀率严格为 **$0.0\%$**。
-- **任务取消令牌 (`CancellationToken`)**：用户在界面执行切片或撤销时，主进程发送 `{"method": "task.cancel", "params": {"task_id": "..."}}`，子进程在 $\le 10\text{ms}$ 内清空当前计算分块并重置租约。
+- **任务取消令牌 (`CancellationToken`)**：用户在界面执行切片或撤销时，主进程发送 `{"jsonrpc": "2.0", "id": "req-cancel", "method": "asr.cancel", "params": {"task_id": "...", "force": false}}`，子进程在 $\le 10\text{ms}$ 内清空当前计算分块并重置租约。
 
 ---
 

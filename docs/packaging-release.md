@@ -5,11 +5,11 @@
 为了彻底解决“Python + CUDA + Node + FFmpeg”复合架构导致的 3GB+ 体积黑洞，系统提供两种发布形态：
 
 1. **轻量核心安装包 (`ClipFlow-Setup-Lite.exe`，推荐，体积 $\le 250\text{ MB}$)**：
-   - 内置：Rust 主进程、轻量嵌入式 Python 3.13 (纯 CPU 推理)、精简版 FFmpeg 9.0.2、Node.js 24 LTS 运行时；
-   - 动效预览直接复用 Windows 10/11 原生常驻的 **Microsoft Edge WebView2**（开发者打包体积为 0）；
-   - 任何无显卡轻薄本或普通 PC 可极速下载，开箱即用。
+   - 内置：Rust 主进程、轻量嵌入式 Python 3.13 (纯 CPU 推理)、精简版 FFmpeg 9.0.2、Node.js 24 LTS 与无头 Chromium 动效运行时；
+   - 动效预览依托 Node.js 24 无头 Chromium 渲染池，通过 Win32 命名共享内存向 `wgpu 30.0` 直传 Raw RGBA（零磁盘 IO、单帧延迟 $\le 1.5\text{ms}$）；
+   - 任何无显卡轻薄本或普通 PC 可极速下载，开箱即用；首次转写时按需拉取 `whisper-large-v2` INT8 模型或外置导入。
 2. **全量离线专业版 (`ClipFlow-Setup-Full.exe`，供局域网与内网工作室)**：
-   - 预捆绑 CUDA 12.x / cuDNN 运行时与 `whisper-large-v2` INT8 权重（体积约 2.2GB），解压即享满血 GPU 加速。
+   - 预捆绑 CUDA 12.x / cuDNN 运行时与 `whisper-large-v2` INT8 权重（体积约 2.2GB，解压即部署至 `%LOCALAPPDATA%\ClipFlow\models\`），解压即享满血 GPU 加速。
 
 ---
 
@@ -29,19 +29,19 @@ ClipFlow_Release/
 │   ├── bin/
 │   │   ├── ffmpeg.exe              # FFmpeg 9.0.2
 │   │   └── ffprobe.exe             # FFprobe 9.0.2
-│   └── models/
-│       ├── whisper-base/           # [内置默认] 极轻量转写模型 (~140MB)，用于基础试用
-│       └── whisper-large-v2/       # [按需下载] 满血精度 INT8 权重 (~1.5GB)
+│   └── templates/                  # 预置动效模板库 (HTML/CSS/JS)
 ```
+
+> **存储分离说明**：依据 [cache-and-storage-spec.md](file:///d:/Work/Dev/ClipFlow/docs/cache-and-storage-spec.md)“双轨分离制”，大体积 AI 模型严禁随软件安装包本地打包或随工程目录重复复制，统一集中寻址于 `%LOCALAPPDATA%\ClipFlow\models\faster-whisper-large-v2\`。
 
 ### 2.1 硬件感知按需扩展机制 (On-Demand Acceleration Packs)
 - **GPU 加速包自动识别**：
   软件启动时探测本地 GPU 设备。若发现 NVIDIA 独显（RTX 20/30/40 系列及更高），且 `resources/cuda_runtime/` 为空，在设置面板弹出轻量提示：
   *“检测到您的设备支持 NVIDIA GPU 极速转写与硬件加速，是否一键下载 GPU 增强包 (约 600MB)？”*
 - **国内高速镜像源与断点续传**：
-  模型权重与 CUDA 加速包统一接入国内高速 CDN 节点与阿里 ModelScope 开源镜像，支持断点续传与后台静默校验（SHA-256），下载中途退出可随时恢复。
-- **动效预览零体积方案**：
-  交互编辑视窗直接绑定操作系统已有的 `WebView2`，彻底省去捆绑 250MB 独立 Chromium 的开销；仅在最终离屏导出时按需调用轻量无头驱动。
+  `whisper-large-v2` 模型权重（INT8 约 1.5GB）与 CUDA 加速包统一接入国内高速 CDN 节点与阿里 ModelScope 开源镜像，支持断点续传与后台静默校验（SHA-256），下载中途退出可随时恢复。
+- **HyperFrames 动效运行时治理**：
+  动效层由轻量无头 Chromium 双 Worker（`PingPongPoolManager`）驱动，启动配置硬限 `--force-gpu-mem-available-mb=512` 与 120 帧周期内存主动清洗，单帧 Raw RGBA 直灌 wgpu 延迟 $\le 1.5\text{ms}$，兼顾超轻预览与母带级逐帧确定性。
 
 ---
 

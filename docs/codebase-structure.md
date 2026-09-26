@@ -78,7 +78,7 @@ flowchart TD
 | **`clipflow-timeline`**| `clipflow-common`, `zstd`, `quick-xml` | `Project`, `Sequence`, `Track`, `Clip`, `Keyframe` 数据模型；`TimelineCommand` 命令栈（Undo/Redo）；`.clipflow` 序列化与反序列化；`TimelineExporter` 外部工程导出标准 Trait、`CutList` 一维切点抽取与有理数整除帧对齐引擎、Apple FCP7 XML (`xmeml v5`) 与规范化 CMX 3600 EDL 流式序列化器、`ConformInspector` 静态合规与降级诊断扫描器，以及面向 M3+ 的 OpenTimelineIO (OTIO) 通用 IR 中枢。纯数据与状态机，无 GUI 依赖。 |
 | **`clipflow-media`** | `ffmpeg-sys-next` (9.0.2), `wgpu` 30.0, `cpal`, `windows` | 视频硬解（D3D11VA）、锁页环形帧池（`PinnedFramePool`）、NV12 双平面极速上传、WGSL 全色域色彩矩阵着色器、监视器自适应下采样（`ProxyGovernor`）、WASAPI 硬件 DAC 时钟锚定、`MonotonicClampedClock` 无锁单调箝位外推主时钟、双阈值迟滞渲染调度（`HysteresisSyncComparator`）、波形峰值文件 (`.peak`) 生成、Windows 命名共享内存 Raw RGBA 消费器（`SharedMemoryConsumer`）、动效帧完成账本（`FrameLedger`）与多媒体三级容灾看门狗。 |
 | **`clipflow-ipc`** | `tokio`, `serde_json`, `interprocess`, `windows-sys` | 管理 Python (`uv`) 和 Node.js 子进程生命周期；Windows 内核级 `JobGuard` 作业对象强绑定（`KILL_ON_JOB_CLOSE` 零孤儿逃逸）；Windows 异步双工命名管道驱动（`\\.\pipe\clipflow-*` JSON-RPC 2.0）；子进程 `stderr` 独立异步非阻塞排水管线（`AsyncStderrDrainer` 消除 4KB 缓冲死锁）；双轨看门狗（0ms 物理 BrokenPipe 即时捕获 + 分片任务进度租约 `ProgressLeaseTracker`）；三级容灾自愈状态机（`FallbackGovernor`: L1 重试 $\to$ L2 CUDA OOM/驱动缺失自愈降级 CPU $\to$ L3 熔断隔离）；跨语言 ASR 服务契约抽象（`AsrWorkerProvider`）与纯内存测试桩（`MockAsrWorker`）。 |
-| **`clipflow-ui`** | `egui` 0.36, `egui_wgpu`, `winit` | 达芬奇底部 6 大分页 Dock 栏切换、PR 剪辑四区分屏、全局公用时间线视图渲染、关键帧曲线编辑器、导出合规与降级诊断看板（`DiagnosticReport`）、工控绿视觉映射。 |
+| **`clipflow-ui`** | `egui` 0.36, `egui_wgpu`, `winit` | 达芬奇底部 6 大分页 Dock 栏切换、PR 剪辑四区分屏、全局公用时间线视图渲染、关键帧曲线编辑器、导出合规与降级诊断看板（`DiagnosticReport`）、Neutral Modern 深色主题映射（深岩灰 `#0F1115`、表面 `#171A21`、钴蓝 `#2F6FEB`、12/8/4px 几何圆角梯队）。 |
 | **`clipflow-app`** | `eframe` 0.36, `tracing` | 应用程序 `main()` 入口、跨模块依赖注入、全局状态根 (`AppState`) 托管、系统托盘与异常捕获。 |
 
 ---

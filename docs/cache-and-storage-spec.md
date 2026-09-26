@@ -29,7 +29,7 @@
 | 路径: %LOCALAPPDATA%\ClipFlow\ (Windows 原生规范)                                                   |
 | 目的：多工程共享大体积 AI 模型、全局配置、操作日志与崩溃转储，避免多工程重复下载数 GB 权重。            |
 |                                                                                                    |
-| ├── models/              # faster-whisper large-v2 模型权重 (~3.1GB, 多工程全局复用)                  |
+| ├── models/              # faster-whisper large-v2 INT8 权重 (~1.5GB, 多工程全局复用)                  |
 | ├── config/              # 用户偏好设置 (settings.json, keymaps.json)                              |
 | ├── logs/                # 宿主与子进程轮转日志 (保留 7 天)                                          |
 | └── templates/           # 全局动效模板资产与预置组件库                                               |
@@ -85,7 +85,7 @@ D:/Videos/202609_Interview/
 - 读写模式：仅当前用户具备完全控制权限。
 
 ### 3.2 AI 模型资产统一寻址 (`models/`)
-针对 `faster-whisper 1.2.1` 运行所需的 `large-v2` 模型（体积约 3.1GB），系统禁止在每个工程目录下重复拉取：
+针对 `faster-whisper 1.2.1` 运行所需的 `large-v2` INT8 量化模型（权重体积约 1.5GB，未量化 FP16 约 3.1GB），系统禁止在每个工程目录下重复拉取：
 - **模型存放路径**：`%LOCALAPPDATA%\ClipFlow\models\faster-whisper-large-v2\`
 - **校验与离线加载**：
   - 启动 Python Worker 时，通过环境变量 `HF_HUB_OFFLINE=1` 与 `HF_HOME=%LOCALAPPDATA%\ClipFlow\models` 强制绑定寻址；

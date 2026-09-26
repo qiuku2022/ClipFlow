@@ -33,8 +33,9 @@
 # 1. 创建 Python 3.13 虚拟环境
 uv venv .venv --python 3.13
 
-# 2. 安装 Python 子进程核心依赖 (faster-whisper 1.2.1 等)
-uv pip install -r pyproject.toml
+# 2. 同步安装 Python 子进程核心依赖 (faster-whisper 1.2.1 等)
+uv sync
+# 或开发模式可编辑安装：uv pip install -e .
 ```
 
 ### 2.3 配置 HyperFrames 动效环境 (Node.js 24)

@@ -276,6 +276,7 @@ pub enum AssetKind {
     Video { width: u32, height: u32, has_audio: bool },
     Audio { sample_rate: u32, channels: u16 },
     Image { width: u32, height: u32 },
+    Subtitle { language: String },
     HyperFramesTemplate { template_id: String, schema_version: String },
 }
 
@@ -296,7 +297,7 @@ pub struct Asset {
 }
 ```
 
-### 2.2 剪辑片段 (`Clip`) 与变换属性
+### 2.2 剪辑片段 (`Clip`) 与多态载荷
 
 ```rust
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -313,6 +314,48 @@ pub struct Transform2D {
 pub struct AudioProperties {
     pub volume_db: Animatable<f32>,  // 分贝，0.0 为原生响度，-60.0 为静音
     pub pan: Animatable<f32>,        // 声相平衡 (-1.0 左声道, 1.0 右声道)
+}
+
+/// 词级时间戳 (用于卡拉OK点亮与文本驱动剪辑)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WordTiming {
+    pub word: String,
+    pub start_time: RationalTime,
+    pub end_time: RationalTime,
+}
+
+/// 字幕样式与排版模型 (完全对齐 subtitle-render-spec.md)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SubtitleStyle {
+    pub font_family: String,
+    pub font_size: f32,
+    pub font_weight: u16,
+    pub fill_color: [f32; 4],
+    pub stroke_width: f32,
+    pub stroke_color: [f32; 4],
+    pub shadow_offset: [f32; 2],
+    pub shadow_blur: f32,
+    pub shadow_color: [f32; 4],
+    pub position_y_percent: f32,
+    pub karaoke_highlight_color: Option<[f32; 4]>,
+}
+
+/// 片段多态专属载荷 (承载不同轨道类型的领域数据)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ClipPayload {
+    /// 普通音视频与静态图片片段
+    Media,
+    /// 口播字幕片段 (C1 轨，含词级时间戳与文字样式)
+    Subtitle {
+        text: String,
+        words: Vec<WordTiming>,
+        style: SubtitleStyle,
+    },
+    /// HyperFrames 动态代码包装片段 (FX 轨，包含模板参数 JSON)
+    HyperFrames {
+        template_id: String,
+        props: serde_json::Value,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,6 +376,8 @@ pub struct Clip {
     pub audio_props: AudioProperties,
     /// 片段专属滤镜链
     pub filters: Vec<ClipFilter>,
+    /// 片段多态专属数据载荷 (音视频 / 字幕 / 动效参数)
+    pub payload: ClipPayload,
     /// 是否被禁用（按 D 键静音/隐藏单片段）
     pub disabled: bool,
 }
