@@ -1,12 +1,71 @@
 # 剪辑工作台界面布局规范 (Edit Layout Specification)
 
-本文档依据实测 Adobe Premiere Pro 经典四区分屏工作区（参考原图见 [docs/assets/pr-reference.png](file:///d:/Work/Dev/ClipFlow/docs/assets/pr-reference.png)），针对 ClipFlow **“Rust 1.98 + wgpu 30.0 + egui 0.36”** 技术底座、**“Windows 11 默认圆角”** 及 **“NVIDIA 信号绿 (#76B900)”** 设计体系制定的剪辑页面布局标准。
+本文档依据实测 Adobe Premiere Pro 经典四区分屏工作区（参考原图见 [docs/assets/pr-reference.png](file:///d:/Work/Dev/ClipFlow/docs/assets/pr-reference.png)），针对 ClipFlow **“Rust 1.98 + wgpu 30.0 + egui 0.36”** 技术底座及 **[NVIDIA 官方深色设计体系 (ui-spec.md)](file:///d:/Work/Dev/ClipFlow/docs/ui-spec.md)**（纯黑底板、工控级 2px 精密锐角、`#76B900` 电能绿信号）制定的剪辑页面布局标准。
 
 ---
 
 ## 1. 整体网格拓扑与分区总览
 
-界面完全对齐 Premiere Pro 经典工业级剪辑工作台格局，采用**“上半屏三区分屏 + 下半屏 100% 满宽常驻时间线”**的稳固两层拓扑，彻底杜绝切页时的容器尺寸跳变与 egui 布局颠簸：
+界面完全对齐 Premiere Pro 经典工业级剪辑工作台格局，采用**“上半屏三区分屏 + 下半屏 100% 满宽常驻时间线”**的稳固两层拓扑，彻底杜绝切页时的容器尺寸跳变与 egui 布局颠簸。
+
+### 1.1 界面实装视觉示意图 (Visual Reference Mockup)
+
+![ClipFlow 剪辑工作台整体界面实装示意图](./assets/clipflow-layout-reference.png)
+
+> **图示说明**：上图为 ClipFlow 剪辑工作台实装视觉效果，严格遵循 [ui-spec.md](./ui-spec.md) 的 NVIDIA 官方深色模式规范（纯黑底板 `#000000`、面板表面 `#1A1A1A`、精密 2px 工控倒角、`#76B900` 电能绿播放指针与激活边框、达芬奇式 48px 底部 Dock 栏以及 PR 经典四区分屏）。
+
+### 1.2 网格拓扑与层级架构图 (Grid Topology Diagram)
+
+```mermaid
+flowchart TD
+    subgraph Window ["ClipFlow 桌面主窗口 (NVIDIA Dark Mode: #000000 底板, 2px 工控精密锐角)"]
+        subgraph TopBar ["顶栏 Menu & Workspace Bar (高度 36px, #1A1A1A)"]
+            Menu["菜单栏: File / Edit / Clip / Sequence"] --- SeqName["序列: 002 中东#1 (1080p 60fps)"] --- LayoutSwitch["工作区布局: 默认剪辑台"]
+        end
+
+        subgraph UpperZone ["上半屏：三区分屏工作区 (占比 58% 视口高度, #1A1A1A)"]
+            subgraph Zone1 ["1. 素材池与效果 (占比 25%)"]
+                BinTab["Project Bin (素材缩略图)"]
+                EffectTab["Effect Controls (参数/关键帧)"]
+            end
+            subgraph Zone2 ["2. 双联监视器视窗 (占比 50%)"]
+                SourceMon["源监视器 (Source Monitor)"]
+                ProgramMon["节目监视器 (Program Monitor)"]
+            end
+            subgraph Zone3 ["3. 属性与主输出电平 (占比 25%)"]
+                Properties["属性检查器 (Inspector)"]
+                MasterMeter["Master 立体声 VU 电平表"]
+            end
+        end
+
+        Splitter["水平可拖拽分割条 (2px solid #5E5E5E)"]
+
+        subgraph LowerZone ["下半屏：全局公用时间线 (占比 42% 视口高度, 跨页绝对常驻)"]
+            subgraph ToolsCol ["工具条 (32px)"]
+                ToolBtns["选择 V / 剃刀 C / 波纹 B / 滑移 Y"]
+            end
+            subgraph TimelineZone ["多轨时间轴矩阵 (#000000 轨道槽, #76B900 播放指针)"]
+                Ruler["时间码标尺 (反向五边形游标头 + 1.5px 纵向对齐线)"]
+                C1["C1 字幕轨 (#352810 暗金 / #EF9100 描边)"]
+                V2["V2 动效轨 HyperFrames (#28103A 深曜紫)"]
+                V1["V1 视频主轨 (#1B2A38 深岩蓝 / #3860BE 描边)"]
+                A1["A1 口播主音频 (#152B1E 暗松绿 + #76B900 实时双色波形)"]
+                A2["A2 背景配乐 BGM (#152B1E 暗松绿)"]
+            end
+        end
+
+        subgraph BottomDock ["底部达芬奇式 Dock 栏 (高度 48px, #000000 底板, 顶部 1px #5E5E5E)"]
+            DockAgent["[ AGENT ]"] --- DockEdit["【 剪辑 (EDIT) ★ #76B900 激活 】"] --- DockMotion["[ 动画 (MOTION) ]"] --- DockAudio["[ 声音 (AUDIO) ]"] --- DockImage["[ 图片 (IMAGE) ]"] --- DockDeliver["[ 导出 (DELIVER) ]"]
+        end
+    end
+
+    TopBar --> UpperZone
+    UpperZone --> Splitter
+    Splitter --> LowerZone
+    LowerZone --> BottomDock
+```
+
+### 1.3 字符级线框排版图 (ASCII Wireframe)
 
 ```
 +----------------------------------------------------------------------------------------------------+
@@ -17,7 +76,7 @@
 |    - 树状素材分类/缩略图    |    - 素材预览   | - 成片合成实时画面 |    - 视频/音频属性调整       |
 |    - 运动/缩放关键帧参数    |    - 走带控制   | - 安全框 / 截帧    |    - 纵向主输出立体声电平表  |
 +-----------------------------+---------------------------------------+------------------------------+
-| 可拖拽水平分割条 (Splitter) - 2px solid #262626                                                    |
+| 可拖拽水平分割条 (Splitter) - 2px solid #5E5E5E                                                    |
 +----------------------------------------------------------------------------------------------------+
 | 4. 工具栏 (32px) + 全局公用时间线 (Global Shared Timeline) 【下半屏 100% 满宽常驻底座】             |
 |    - [Tools 竖条] | - C1 字幕轨 (faster-whisper 转写词级时间戳)                                    |
@@ -25,7 +84,7 @@
 |    - [A1-A3 轨]   | - 口播人声音频 / 背景配乐 (BGM) / 音效环境 (SFX)                               |
 |    - [时间码标尺] | - 支持高精度滚轮缩放、磁吸 (Snap)、帧网格吸附与波纹剪辑                        |
 +----------------------------------------------------------------------------------------------------+
-| 底部 Dock: [ Agent ] | 【剪辑】 | [ 动画 ] | [ 声音 ] | [ 图片 ] | [ 导出 ] (高度 48px, Win 11 圆角) |
+| 底部 Dock: [ Agent ] | 【剪辑】 | [ 动画 ] | [ 声音 ] | [ 图片 ] | [ 导出 ] (高度 48px, 2px 工控倒角) |
 +----------------------------------------------------------------------------------------------------+
 ```
 
@@ -40,7 +99,7 @@
   - `Lumetri Scopes`（示波器标签）
   - `Audio Clip Mixer`（单素材音频混音器）
 - **核心工作视窗**：
-  - 由 `wgpu 30.0` 驱动的硬件纹理渲染视口，外框采用 Win 11 `8px` 圆角。
+  - 由 `wgpu 30.0` 驱动的硬件纹理渲染视口，外框采用 NVIDIA 规范 `2px` 工控倒角与 `1px solid #5E5E5E` 细分割线。
 - **底部走带与控制栏（高度 36px）**：
   - **左侧时间码**：当前素材播放头时间（大字号等宽，`00:00:00:00`）。
   - **缩放与画质下拉框**：
@@ -84,7 +143,7 @@
   - `Graphics Templates` (动态图形模板)
   - `Essential Sound` (基本声音)
 - **Effects 面板内部分级树**：
-  - 顶部快速过滤搜索输入框（Win 11 `4px` 圆角，带清除按钮）。
+  - 顶部快速过滤搜索输入框（NVIDIA 规范 `2px` 锐角，带清除按钮）。
   - 折叠树分类（每类带文件夹图标与数量统计）：
     - `> Presets` (系统预设)
     - `> Lumetri Presets` (调色滤镜 LUT 预设)
@@ -106,7 +165,7 @@
   - 搜索框与选择统计标签：`1 of 8 items selected`。
 - **双视图模式**：
   1. **网格图标视图 (Grid View)**：
-     - 卡片圆角 `4px`，带素材首帧高清缩略图，悬停时支持鼠标左右刮擦 (Hover Scrub) 动态取帧预览。
+     - 卡片圆角 `2px`，带素材首帧高清缩略图，悬停时支持鼠标左右刮擦 (Hover Scrub) 动态取帧预览。
      - 底部显示文件名及素材长度胶囊徽章（如 `4:47:15`、`2:01`）。
      - 选中项外框呈现 `1.5px solid #76B900` (NVIDIA 信号绿)。
   2. **列表视图 (List View)**：
@@ -216,10 +275,10 @@
 
 ## 3. 与 ClipFlow 整体系统架构与设计体系的融合
 
-1. **圆角曲率彻底替换为 Windows 11 Fluent 规范**：
-   - PR 原生界面中各面板为传统的 0-1px 硬直角边框；在 ClipFlow 中，六大核心面板的外框全面采用 **Win 11 `8px` 舒适曲率**，按钮与输入控件采用 **`4px`**，时间轴片段采用 **`3px`**，避免视觉割裂感。
-2. **NVIDIA 标志性电能绿 (`#76B900`) 全面替代 Adobe 亮蓝**：
-   - 将原图中的高亮蓝色源修补块（`V1`, `A1`）、时间轴反向五边形播放指针、激活选中框全面替换为 **NVIDIA Green (`#76B900`)** 与 **Electric Lime (`#BFF230`)**，与整套工控设计体系保持一致。
+1. **统一收敛为 NVIDIA 2px 工控精密倒角**：
+   - 遵照 [ui-spec.md](file:///d:/Work/Dev/ClipFlow/docs/ui-spec.md) 确立的 NVIDIA 深色设计体系，全系统六大核心面板外框、按钮、输入控件及时间轴片段全面统一采用 **`2px` 工业级锐角**（微小标签与指示器为 **`1px`**），消解普通软件松散感，展现高精度工控硬件质感。
+2. **NVIDIA 标志性电能绿 (`#76B900`) 与交互转移色全面替代 Adobe 亮蓝**：
+   - 将原图中的高亮蓝色源修补块（`V1`, `A1`）、时间轴反向五边形播放指针、激活选中框全面替换为 **NVIDIA Green (`#76B900`)** 与 **Electric Lime (`#BFF230`)**；按钮 Hover 采用 **NVIDIA Teal (`#1EAEDB`)**，Active 采用 **Electric Blue (`#007FFF`)**，与整套设计体系严格对齐。
 3. **全局公用时间线无缝接合**：
    - 剪辑工作台下部的【2.5 核心多轨公用时间线】在用户点击底部 Dock 栏切换到 `Agent`、`动画`、`声音`、`图片` 或 `导出` 页面时，其播放指针坐标、多轨片段数据与缩放视口在内存中绝对常驻，仅上部视窗按需切换为对应工作流界面。
 
