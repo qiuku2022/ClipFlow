@@ -25,7 +25,7 @@
 | 03 | [进程间通信协议 (ipc-protocol.md)](file:///d:/Work/Dev/ClipFlow/docs/ipc-protocol.md) | Rust 与 Python 之间的 ASR 转写、口播切分、HyperFrames 渲染任务下发接口定义 | 已对齐最新架构 |
 | 04 | [开发环境与构建指南 (environment-setup.md)](file:///d:/Work/Dev/ClipFlow/docs/environment-setup.md) | Rust 工具链、MSVC、Python 3.13 (`uv`)、FFmpeg 9.0.2、Node 24 本地调试流程 | 已对齐最新架构 |
 | 05 | [打包分发与更新方案 (packaging-release.md)](file:///d:/Work/Dev/ClipFlow/docs/packaging-release.md) | 复合多运行时目录布局编排、NSIS 打包、代码签名与更新方案 | 已对齐最新架构 |
-| 06 | [UI 设计与视觉规范 (ui-spec.md)](file:///d:/Work/Dev/ClipFlow/docs/ui-spec.md) | 遵循 NVIDIA 官方深色设计体系、纯黑底板、工控级 2px 精密锐角、egui 0.36 主题映射 | 已升级对齐 |
+| 06 | [UI 设计与视觉规范 (ui-spec.md)](file:///d:/Work/Dev/ClipFlow/docs/ui-spec.md) | 采用 OpenDesign Neutral Modern 深色设计体系、深岩灰底板、分层中性表面、钴蓝交互信号、egui 0.36 主题映射 | 已升级对齐 |
 | 07 | [剪辑工作台布局规范 (edit-layout-spec.md)](file:///d:/Work/Dev/ClipFlow/docs/edit-layout-spec.md) | 完全对齐 Premiere Pro 经典四区分屏、六大功能区深度规格与公用时间线深度实现 | 新增完成 |
 | 08 | [时间轴数据模型与工程持久化规范 (timeline-data-model.md)](file:///d:/Work/Dev/ClipFlow/docs/timeline-data-model.md) | 亚毫秒 RationalTime、Rust 核心数据结构、Undo/Redo 事务系统与 .clipflow 容器规范 | 新增完成 (P0) |
 | 09 | [多媒体管线与音画同步渲染规范 (media-pipeline-spec.md)](file:///d:/Work/Dev/ClipFlow/docs/media-pipeline-spec.md) | FFmpeg 9.0.2 D3D11VA 硬解、wgpu 30.0 纹理流水线、音频时钟 A/V Sync、波形与金字塔缓存 | 新增完成 (P0) |

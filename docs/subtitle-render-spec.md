@@ -104,7 +104,7 @@ pub struct SubtitleStyle {
 ### 3.1 词级卡拉OK点亮机制 (Karaoke Word Highlighting)
 - 当播放指针游走在 `[clip.start, clip.end)` 期间，文本着色器接收当前 `Playhead_PTS`；
 - 遍历当前字幕块内的词级时间戳 `words: Vec<WordTiming>`；
-- 当前命中词渲染为高饱和度强调色（如 NVIDIA 电能绿 `#76B900` 或明黄色 `#FFE600`），未发音或已发音词保持默认白色，赋予口播视频极强的视觉抓手。
+- 当前命中词渲染为高饱和度强调色（如 Neutral Modern 钴蓝信号 `#2F6FEB`、金黄标色 `#EAB308` 或高光亮白），未发音或已发音词保持次级灰白，赋予口播视频极强的视觉抓手。
 
 ---
 

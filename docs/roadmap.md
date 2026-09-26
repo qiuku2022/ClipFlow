@@ -59,11 +59,11 @@ flowchart TD
     cargo test -p clipflow-common
     ```
 
-- [ ] **M0-T03 主窗口宿主与工控绿视觉主题 (`clipflow-app` & `clipflow-ui`)**
+- [ ] **M0-T03 主窗口宿主与 Neutral Modern 深色视觉主题 (`clipflow-app` & `clipflow-ui`)**
   - **前置依赖**：M0-T02
   - **涉改模块**：`crates/clipflow-app/`, `crates/clipflow-ui/`
   - **对应规范**：[docs/ui-spec.md](file:///d:/Work/Dev/ClipFlow/docs/ui-spec.md)
-  - **核心交付物**：搭建 `eframe`/`egui 0.36` + `wgpu 30.0` 应用程序主入口，严格应用 NVIDIA 官方深色模式设计体系（纯黑底板、2px 精密锐角、`#76B900` 电能绿信号、Teal/Blue 交互色彩转移）与 egui 样式映射表。
+  - **核心交付物**：搭建 `eframe`/`egui 0.36` + `wgpu 30.0` 应用程序主入口，严格应用 OpenDesign Neutral Modern 深色模式设计体系（深岩灰底板 `#0F1115`、分层中性表面 `#171A21`、`#2F6FEB` 钴蓝交互信号、12px/8px/4px 几何圆角梯队）与 egui 样式映射表。
   - **验收命令 (DoD)**：
     ```bash
     cargo run -p clipflow-app # 窗口秒级弹出，无渲染报错，主题色彩对齐规范

@@ -1,147 +1,143 @@
 # ClipFlow UI 设计规范与视觉体系 (UI Specification)
 
-> **设计基准**：严格遵循 **NVIDIA 官方深色设计体系 (NVIDIA Dark Mode Design System)** 与高算力硬核科技美学（纯黑底蕴 `#000000`、次级表面 `#1A1A1A`、信号级电能绿 `#76B900`、工控级 2px 精密锐角、Bold 700 权威字重），融合专业音视频剪辑 (NLE) 暗房色彩还原标准，提供高对比度、低视觉疲劳与硬件级操作质感。
+> **设计基准**：采用来自 OpenDesign 的 **Neutral Modern 深色设计体系 (Neutral Modern Dark Mode)**。  
+> **核心定位**：以“沉静内敛、内容优先、精密工控 (Calm, Functional, Quietly Confident)”为核心哲学。以深岩灰底板 (`#0F1115`)、分层中性表面 (`#171A21` / `#1E222B`)、精密发丝边框 (`#2A2F3A`) 与极度克制的钴蓝交互信号 (`#2F6FEB`)，构建兼顾广播级暗房色彩还原、长时间剪辑无视觉疲劳与现代产品质感的专业桌面音视频工作台。
 
 ---
 
 ## 1. 核心设计哲学 (Visual Theme & Atmosphere)
 
-NVIDIA 深色模式的核心在于通过**极度克制的设计语言传达极致的计算能量与精密工控感**：
+Neutral Modern 深色模式遵循 OpenDesign 规范与专业数字视音频工作台 (NLE/DAW) 的界面法则：
 
-- **信号而非表面 (Signal-Not-Surface)**：
-  标志性 NVIDIA Green (`#76B900`) **绝不作为大面积填充背景**，而作为且仅作为系统的“第一交互信号源”——专用于边框高亮 (`2px solid #76B900`)、播放指针 (Playhead)、激活轨道描边、主操作按钮线框、高亮关键帧与状态指示器。
-- **纯粹黑暗房底蕴 (True Black Foundation)**：
-  界面以纯黑 (`#000000`) 作为应用最底板，面板容器与卡片采用近黑 (`#1A1A1A`)，搭配中性灰细边框 (`#5E5E5E`)。避免低劣的泛蓝灰色调，确保监视器内的视频色彩还原达到广播级纯净度。
-- **工控级精密锐角 (2px Sharp Engineered Corners)**：
-  摒弃消费级软件圆润松散的弧度，全系统控件、面板与时间轴切片统一收敛为 **2px 极简工控圆角**（微小标签为 **1px**）。如同高精度数控机床切割的硬件表面，严谨、紧凑、冷峻。
-- **材质差异驱动的纵深层次 (Contrast-Driven Depth)**：
-  杜绝花哨的毛玻璃 (Glassmorphism) 与强漫反射阴影，层次完全由**材质与色阶反差**（纯黑 `#000000`、近黑 `#1A1A1A`、微弱环境光 `rgba(0,0,0,0.3) 0px 0px 5px`）自然拉开，保持界面的极速响应与硬核专业感。
-- **权威默认字重 (Bold 700 as Dominant Voice)**：
-  除大段正文与描述采用常规字重 (400) 外，所有标题、按钮、标签、时间码与导航项默认采用 **Bold (700)**，结合紧凑行高 (1.25) 与大写导航文本，塑造工业硬件铭牌般的自信与严谨。
+- **内容为先，界面退后 (Content-First, Chrome-Second)**：
+  软件界面的使命是烘托画面与波形内容，而非宣泄界面装饰。杜绝无意义的彩色背景涂抹、发光大投影与毛玻璃折射，所有视觉层次均由严谨的色阶与结构边框自然拉开。
+- **非纯黑沉浸暗房基底 (True Dark Slate, Not Pure Black)**：
+  严格遵循设计体系的防眩光准则——**避免使用刺眼的纯黑 `#000000` 与 100% 刺眼纯白 `#FFFFFF`**（防止 OLED/高刷显示器的拖影残影与高反差视觉疲劳）。工作区以 `#0F1115` 为主底板，面板以 `#171A21` 形成温润悬浮，确保监视器内视频与调色预览达到广播级纯净度。
+- **极度克制的钴蓝信号 (Cobalt Blue Accent `#2F6FEB`)**：
+  标志性 Cobalt Blue (`#2F6FEB`) 是系统的**第一交互信号源**。遵循“单屏不超过 1~2 处显著焦点”的严苛原则，专用于：播放指针 (Playhead)、主操作按钮 (Primary CTA)、选中与激活边框、关键帧节点与进度指示。
+- **暗色状态反转法则 (Dark Mode State Inversion)**：
+  在深色模式下，按钮与控件悬停 (Hover) 状态不采取暗化，而是通过向白色混色提亮 (`color-mix(in oklab, var(--accent), white 10%)`) 形成清晰反馈；按下 (Active) 则微幅下沉。
+- **严谨工业级倒角梯度 (Tailored Radius Scale)**：
+  为高密度信息流量身定制：微型切片与轨道标签收敛为 **4px**，基础控件（按钮、输入框）为 **8px**，视窗面板容器为 **12px**。既保持工控机具的紧凑精密，又具备当代软件的高级耐看质感。
 
 ---
 
 ## 2. 几何曲率规范 (Border Radius Scale)
 
-系统全量控件严格遵照 NVIDIA 工业硬件设计规范的倒角梯度：
+系统全量控件遵循精密、清晰的圆角层级梯队：
 
 ```
 +---------------------------------------------------------------------------------+
 | 桌面窗口宿主外框 (Host Window Frame): 8-12px (由 Windows 11 OS 顶层外壳接管)      |
 |  +---------------------------------------------------------------------------+  |
-|  | 内部面板 / 视窗容器 (Panel Level): 2px                                       |  |
+|  | 内部面板 / 视窗容器 (Panel Level): 12px (--radius-md)                        |  |
 |  |  +----------------------------------+  +-------------------------------+  |  |
-|  |  | 按钮 / 控件 / 卡片 (Control): 2px  |  | 时间轴片段 (Clip): 2px        |  |  |
+|  |  | 基础交互控件 (Control): 8px       |  | 时间轴片段 (Clip): 4px        |  |  |
 |  |  | [ 主操作 CTA ]                    |  | [===== 视频 V1 =====]        |  |  |
 |  |  +----------------------------------+  +-------------------------------+  |  |
 |  |  +----------------------------------+  +-------------------------------+  |  |
-|  |  | 微型标签 / 徽章 (Micro Tag): 1px    |  | 圆形指示器 (Circle): 50%       |  |  |
+|  |  | 微型标签 / 徽章 (Micro Tag): 4px   |  | 圆形指示器 (Circle): 50%       |  |  |
 |  |  +----------------------------------+  +-------------------------------+  |  |
 |  +---------------------------------------------------------------------------+  |
 +---------------------------------------------------------------------------------+
 ```
 
-| 级别 | 曲率半径 (Radius) | 对应设计定义 | 软件内具体应用场景 |
-| :--- | :--- | :--- | :--- |
-| **标准容器与面板 (Standard Panel)** | **2px** | NVIDIA 硬件外壳倒角基准 | PR 四区分屏面板外框、模态对话框、参数调节卡片、监视器外壳 |
-| **基础交互控件 (Standard Control)** | **2px** | 统一工控精密圆角 | 按钮 (Button)、输入框 (Input)、下拉菜单、滑块滑槽、数值微调框 |
-| **时间轴片段 (Timeline Clip)** | **2px** | 密集数据流精密拼接 | 多轨时间轴上的视频片段、音频片段、字幕块、动效块（紧凑拼合不露缝） |
-| **微型标签 (Micro Element)** | **1px** | 极小尺寸结构倒角 | 快捷键提示徽章、轨道头微型编号（`V1`, `A1`）、代码行号块 |
-| **圆形指示器 (Circle Indicator)** | **50%** | 点状状态信号 | Agent 在线呼吸指示灯、录音红点、调色色轮中心指针 |
+| 级别 | Token | 曲率半径 (Radius) | 对应设计定义 | 软件内具体应用场景 |
+| :--- | :--- | :--- | :--- | :--- |
+| **视窗与面板容器** | `--radius-md` | **12px** | 模块化视窗外壳 | PR 四区分屏面板外框、模态对话框、参数调节卡片、监视器外框 |
+| **基础交互控件** | `--radius-sm` | **8px** | 标准人机交互件 | 按钮 (Button)、输入框 (Input)、下拉菜单、搜索框、数值微调框 |
+| **高密流切片/标签**| `--radius-xs` | **4px** | 密集数据切片 | 多轨时间轴上的视频片段、音频片段、字幕块、动效块、轨道头编号 |
+| **微型状态标签** | `--radius-xs` | **4px** | 辅助状态标签 | 快捷键提示徽章、时间码微调徽标、帧率标签 |
+| **胶囊与点状指示** | `--radius-pill`| **9999px (50%)** | 状态流动指示 | Agent 在线呼吸指示灯、录音红点、调色色轮中心指针、Chip 标签 |
 
 ---
 
 ## 3. 色彩体系与 Tokens (Color Palette & Semantic Roles)
 
-### 3.1 核心品牌与信号色 (Primary Brand & Signal)
+本地设计体系镜像保存于 [`.local/design-system/neutral-modern/`](file:///d:/Work/Dev/ClipFlow/.local/design-system/neutral-modern/)。
 
-| 语义名称 | 色值 (HEX) | RGB 值 | 界面功能与定义 |
+### 3.1 核心中性色与表面层级 (Surfaces & Canvas)
+
+| 语义角色 | Token 名称 | 色值 (HEX / RGBA) | 视觉功能与定义 |
 | :--- | :--- | :--- | :--- |
-| **NVIDIA Green (主信号色)** | `#76B900` | `rgb(118, 185, 0)` | **最高优先级交互色**：播放指针、主 CTA 边框、选中高亮、激活轨道外框 |
-| **NVIDIA Green Light (亮绿高亮)** | `#BFF230` | `rgb(191, 242, 48)` | 悬浮高亮 (Hover)、关键帧节点选中高亮、音频波形峰值瞬变 |
-| **True Black (纯黑画布)** | `#000000` | `rgb(0, 0, 0)` | 全局主视口底板、监视器外部暗房、时间轴轨道槽背景 |
-| **Near Black (表面深灰)** | `#1A1A1A` | `rgb(26, 26, 26)` | 面板卡片底色、列表项背景、浮动弹窗与对话框背景 |
-| **Pure White (纯白文字)** | `#FFFFFF` | `rgb(255, 255, 255)` | 深色背景上的主要文字、主标题、激活时间码、选中图标 |
+| **画布底色** | `--bg` | `#0F1115` | 应用全局总底板、监视器外部暗房、时间轴轨道槽背景 |
+| **主面板表面** | `--surface` | `#171A21` | 剪辑四大面板（素材池、监视器、检查器、时间轴）内部卡片 |
+| **次级/工具表面** | `--surface-warm` | `#1E222B` | 顶部菜单栏、工具箱条、底部达芬奇式 Dock 栏背景 |
+| **激活/焦点表面** | `--surface-active`| `#232733` | 当前处于焦点、被鼠标选中或高亮的面板区域 |
 
-### 3.2 交互状态与动态色彩转移 (Interactive States)
+### 3.2 文本阶梯 (Foreground Ramp)
 
-NVIDIA 规范中独特的交互色彩转移法则（非单纯调亮透明度，而是向专属色相偏移）：
-
-| 交互状态 | 映射色值 (HEX) | RGB 值 | 行为定义与应用组件 |
+| 阶梯层级 | Token 名称 | 色值 (HEX) | 用途与映射面板 |
 | :--- | :--- | :--- | :--- |
-| **Button Hover (按钮悬浮)** | `#1EAEDB` (NVIDIA Teal) | `rgb(30, 174, 219)` | 鼠标悬浮于主要按钮时，背景由透明切换为填充 Teal，文字保持反白 |
-| **Button Active (按钮按下)** | `#007FFF` (Electric Blue) | `rgb(0, 127, 255)` | 按钮被鼠标按下激活，背景切换为亮蓝，边框切换为 `1px solid #003EFF` |
-| **Link Hover (链接悬浮)** | `#3860BE` (Interactive Blue)| `rgb(56, 96, 190)` | 所有可点击文本链接从白色或浅灰平滑切换为交互蓝 |
-| **Focus Ring (键盘聚焦)** | `#76B900` / `#000000` | - | 控件聚焦外框，暗色模式下以 `2px solid #76B900` 发光线呈现 |
+| **主阅读文字** | `--fg` | `#F8FAFC` | 关键标题、主时间码数字、当前激活标签、选中图标 |
+| **次级正文** | `--fg-2` | `#E2E8F0` | 属性面板参数名、下拉菜单选项、二级标题 |
+| **弱化辅助文本** | `--muted` | `#A7ADBA` | 描述文字、功能说明、占位符、未选中小图标 |
+| **极弱/元数据** | `--meta` | `#64748B` | 时间轴刻度数值、轨道头编号 (`V1`, `A1`)、媒体编码信息 |
 
-### 3.3 中性灰阶阶梯 (Neutral Scale)
+### 3.3 交互信号色与状态色 (Accent & States)
 
-| 阶梯层级 | 色值 (HEX) | 用途与映射面板 |
-| :--- | :--- | :--- |
-| **Canvas Void (画布底层)** | `#000000` | 窗口总底板、Dock 栏底色、视频监视器外部深色沉浸暗房 |
-| **Panel Surface (面板背景)** | `#1A1A1A` | 剪辑四大面板（项目池、源监视器、节目监视器、时间轴）内部卡片 |
-| **Gray Border (分割与边框)** | `#5E5E5E` | 面板间的精密分割线 (`1px solid #5E5E5E`)、次级容器边框 |
-| **Gray 500 (微弱提示/页脚)** | `#757575` | 占位符文字 (Placeholder)、禁用控件文字、底部版权信息 |
-| **Gray 400 (次要元数据)** | `#898989` | 标尺刻度辅助线、媒体元数据（帧率、编码格式、采样率） |
-| **Gray 300 (次级正文)** | `#A7A7A7` | 面板副标题、未选中状态标签、功能说明描述文本 |
-| **Pure White (主阅读文字)** | `#FFFFFF` | 关键标题、时间码、监视器参数、当前选中文案 |
-
-### 3.4 状态与语义色谱 (Status & Semantic)
-
-| 语义类型 | 标志色 (HEX) | 暗色搭配 (HEX) | 视觉功能说明 |
+| 语义名称 | Token 名称 | 色值 (HEX / CSS) | 界面功能与定义 |
 | :--- | :--- | :--- | :--- |
-| **Error / Destructive (错误/危险)** | `#E52020` (Red 500) | `#650B0B` (Red 800) | 渲染失败、素材丢失、文件删除警告、重读停顿建议切除条 |
-| **Warning / Energy (警告/高能量)** | `#DF6500` (Orange 400)| `#EF9100` (Yellow 300) | 音频电平接近过载 (>-6dB)、硬件占用警告、时间轴入出点标记 |
-| **Success / Positive (成功/正常)** | `#3F8500` (Green 500) | `#152B00` (Deep Forest) | 渲染导出完成、硬解管线正常就绪、音频标准电平安全区 |
-| **Informational (信息指示)** | `#0046A4` (Blue 700) | `#0B1B33` | 软件更新提示、后台 ASR 转写进度、系统状态广播 |
-| **AI / Premium (Agent/动效)** | `#4D1368` (Purple 800)| `#8C1C55` (Fuchsia 700)| 导演 Agent 思考规划高亮、HyperFrames 动态图层专属品牌色 |
+| **Cobalt 钴蓝 (主信号)**| `--accent` | `#2F6FEB` | **最高优先级交互色**：播放指针、主 CTA、选中外框、活动轨道指示 |
+| **交互提亮 (Hover)** | `--accent-hover` | `color-mix(in oklab, #2F6FEB, white 10%)` | 悬浮状态轻度提亮反馈 |
+| **交互下沉 (Active)** | `--accent-active`| `color-mix(in oklab, #2F6FEB, black 10%)` | 鼠标按下时的加深反馈 |
+| **信号上层文字** | `--accent-on` | `#FFFFFF` | 钴蓝底色上的高反差纯白文本 |
+| **聚焦外框 (Focus Ring)**| `--focus-ring` | `0 0 0 3px rgba(47, 111, 235, 0.35)` | 键盘导航与输入框聚焦光圈 |
 
-### 3.5 非编多轨时间轴专属色谱 (Timeline Tracks)
+### 3.4 结构线条与边框 (Borders & Dividers)
 
-结合专业剪辑直观性与 NVIDIA 深色工程标准：
+| 语义角色 | Token 名称 | 色值 (HEX / RGBA) | 视觉功能说明 |
+| :--- | :--- | :--- | :--- |
+| **主边框** | `--border` | `#2A2F3A` | 面板外框、分屏可拖拽分割条、标准输入框描边 |
+| **柔和边框** | `--border-soft` | `rgba(255, 255, 255, 0.08)` | 列表项行内分割、时间轴辅助刻度线、卡片内部分区 |
+| **激活边框** | `--border-active` | `#2F6FEB` | 激活选中的轨道外框、聚焦容器高亮边框 |
+
+### 3.5 状态与语义色谱 (Status & Semantic)
+
+| 语义类型 | Token 名称 | 基础色值 | 暗色辅助搭配 | 视觉功能说明 |
+| :--- | :--- | :--- | :--- | :--- |
+| **Success (成功/安全)** | `--success` | `#17A34A` | `#122119` | 导出渲染完成、硬解管线就绪、音频标准电平安全区 |
+| **Warning (警告/高能量)**| `--warn` | `#EAB308` | `#271F12` | 音频接近过载 (-6dB~0dB)、硬件高负载警告、入出点标记 |
+| **Danger (危险/破坏)** | `--danger` | `#DC2626` | `#2B1214` | 剃刀切割点、删除素材确认、音频爆音过载 (>0dB) |
+| **Info (提示/转写)** | `--info` | `#0284C7` | `#0E1F2D` | 后台 ASR 进度指示、系统提示条、素材导入提示 |
+
+### 3.6 专业非编多轨时间轴专属色谱 (Timeline Tracks)
+
+结合非编软件操作直观性与 Neutral Modern 深色规范，轨道片段采用低饱和专业暗彩色底，搭配明晰辨识边框：
 
 | 轨道类型 | 片段填充底色 | 描边高亮色 | 内部波形/数据视觉定义 |
 | :--- | :--- | :--- | :--- |
-| **视频主轨 (V1/V2/V3)** | `#1B2A38` (深岩蓝) | `#3860BE` | 视频片段，沉稳冷调，严防界面原色干扰画质监看 |
-| **音频主轨 (A1/A2/A3)** | `#152B1E` (暗松绿) | `#3F8500` | 音频片段，内嵌 `#76B900`（正电平）动态双色精细波形 |
-| **字幕轨 (Subtitle)** | `#352810` (暗金棕) | `#EF9100` | ASR 词级转写字幕块，高辨识度金黄边框指示 |
-| **HyperFrames 动效轨** | `#28103A` (深曜紫) | `#9B51E0` | 代码逐帧渲染动效层、片头角标与动态图表图层 |
-| **Agent 建议切除标记** | `#3D0F0F` (警示暗红)| `#E52020` | 智能标记的停顿无声、重复啰嗦与错词建议切除切片 |
-
-### 3.6 阴影与微光系统 (Shadows & Elevation)
-
-- **环境卡片阴影 (Ambient Shadow)**：`rgba(0, 0, 0, 0.3) 0px 0px 5px 0px`。用于浮动卡片、菜单和模态框，极其微弱克制。
-- **无模糊光效原则**：拒绝大面积的 CSS/GPU Gaussian Blur，深度由纯色边框与灰度梯度构建；仅当 Agent 处于活动规划状态时，允许在输入框周围产生轻量绿色呼吸脉冲边框 (`box-shadow: 0 0 6px rgba(118, 185, 0, 0.4)`)。
+| **视频主轨 (V1/V2/V3)** | `#151E2E` (沉稳青蓝) | `#2B4570` | 视频片段，沉稳低干涉冷调，不干扰监视器画质与调色评估 |
+| **音频主轨 (A1/A2/A3)** | `#122119` (暗青墨绿) | `#1E4A32` | 音频片段，内嵌 `#17A34A` 实时双色精细波形 |
+| **字幕轨 (C1/Subtitle)** | `#271F12` (暗暖金棕) | `#63471C` | ASR 词级转写字幕块，字形高亮显示，与音视频轨道分明 |
+| **动效轨 (HyperFrames)** | `#22142D` (深曜曜紫) | `#522974` | Web 逐帧代码动效图层、片头角标与动态花字 |
+| **Agent 建议切除标记** | `#2B1214` (警示暗红) | `#DC2626` | 智能标记的停顿气口、重复口误建议切除区域 |
 
 ---
 
 ## 4. 字体与排版规范 (Typography)
 
-### 4.1 字体栈族 (Font Family)
+### 4.1 字体族栈 (Font Family)
 
-- **UI 界面通用 (欧洲工业工程质感)**：
-  `"NVIDIA-EMEA", "Segoe UI Variable", "Segoe UI", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`
-- **时间码与数值参数 (精密等宽)**：
-  `"Cascadia Code", "Consolas", "Segoe UI Mono", monospace`
-- **HyperFrames 动效代码编辑区**：
-  `"Cascadia Code", "JetBrains Mono", monospace`
+- **UI 界面通用 (现代化无衬线体系)**：
+  `"Inter", -apple-system, system-ui, "Microsoft YaHei UI", "Source Han Sans CN", sans-serif`
+- **时间码、标尺刻度与硬件数值 (精密等宽)**：
+  `"JetBrains Mono", ui-monospace, "Cascadia Code", monospace`
 
 ### 4.2 文字层级梯度表 (Typography Hierarchy)
 
-| 角色层级 (Role) | 字号 (Size) | 字重 (Weight) | 行高 (Line Height) | 大小写规范 | 应用场景说明 |
+| 角色层级 (Role) | 字号 (Size) | 字重 (Weight) | 行高 (Line Height) | 大小写 / 字距 | 应用场景说明 |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Display Hero** | 36px (2.25rem) | **700 (Bold)** | 1.25 (紧凑) | 默认 | 欢迎引导大标题、Agent 导演核心总方案命名 |
-| **Section Heading** | 24px (1.50rem) | **700 (Bold)** | 1.25 (紧凑) | 默认 | 面板大标签 (如 "项目池"、"效果控件"、"混音台") |
-| **Sub-heading** | 20px (1.25rem) | **700 (Bold)** | 1.25 (紧凑) | 默认 | 导出预设卡片标题、Agent 规划子步骤标题 |
-| **Body Bold** | 16px (1.00rem) | **700 (Bold)** | 1.50 | 默认 | 关键状态指示、主操作参数项、选中文本 |
-| **Body Regular** | 16px (1.00rem) | 400 (Regular) | 1.50 | 默认 | 视频长描述、AI 对话详细说明正文、使用指南 |
-| **Button Large** | 18px (1.13rem) | **700 (Bold)** | 1.25 (紧凑) | 默认 | 首页或全局重要操作主 CTA 按钮 |
-| **Button Standard**| 16px (1.00rem) | **700 (Bold)** | 1.25 (紧凑) | 默认 | 标准工具栏按钮、模态框确认/取消按钮 |
-| **Button Compact** | 14.4px (0.9rem) | **700 (Bold)** | 1.00 (等宽) | 字母间距 0.14px | 轨道头小按钮 (Mute/Solo/Lock)、时间码微调按钮 |
-| **Nav Link Upper** | 14px (0.88rem) | **700 (Bold)** | 1.43 | **UPPERCASE** | 达芬奇式底部 Dock 栏导航项、硬件参数标牌 |
-| **Timecode Large** | 18px (1.13rem) | **700 (Bold)** | 1.00 (等宽) | 等宽数字 | 节目监视器大时间码显示 (`00:01:24:12`) |
-| **Timecode Ruler** | 10px (0.63rem) | 500 (Medium) | 1.00 (等宽) | 等宽数字 | 时间轴标尺刻度时间文字 |
-| **Micro Label** | 11px (0.69rem) | **700 (Bold)** | 1.00 (紧凑) | **UPPERCASE** | 硬件级状态徽章 (如 "GPU-INT8", "CUDA-D3D11VA") |
+| **Display Hero** | 36px | 600 (SemiBold) | 1.20 | -0.01em | 欢迎页大标题、Agent 导演方案总览大标题 |
+| **Section Heading** | 24px | 600 (SemiBold) | 1.20 | -0.01em | 面板大标签 (如 "素材池"、"效果控件"、"混音台") |
+| **Sub-heading** | 20px | 600 (SemiBold) | 1.25 | 默认 | 导出预设卡片标题、属性折叠组标题 |
+| **Body Base** | 16px | 400 (Regular) | 1.50 | 默认 | 参数名称、常规设置说明、对话消息正文 |
+| **Body Small** | 14px | 400 (Regular) | 1.50 | 默认 | 列表项标题、素材文件信息、次级正文 |
+| **Button Standard**| 14px / 16px | 600 (SemiBold) | 1.20 | 默认 | 标准操作按钮标签、对话框确认/取消 |
+| **Nav Dock Item** | 13px | 600 (SemiBold) | 1.20 | UPPERCASE | 达芬奇式底部 6 大 Dock 栏导航项 |
+| **Timecode Large** | 20px | 600 (SemiBold) | 1.00 (等宽) | 等宽数字 | 节目监视器大时间码 (`00:01:24:12`) |
+| **Timecode Ruler** | 11px | 500 (Medium) | 1.00 (等宽) | 等宽数字 | 时间轴刻度标尺时间标记 |
+| **Micro Tag** | 12px | 500 (Medium) | 1.00 | 默认 | 轨道头编号 (`V1`, `A1`)、硬件标签 (`D3D11VA`) |
 
 ---
 
@@ -151,159 +147,167 @@ NVIDIA 规范中独特的交互色彩转移法则（非单纯调亮透明度，�
 
 #### 主要操作按钮 (Primary CTA)
 - **默认外观 (Resting)**：
-  - 背景：`transparent` (全透明)
-  - 边框：`2px solid #76B900` (NVIDIA Green 纯正信号边框)
-  - 圆角：`2px` (工业级锐角)
-  - 文字颜色：`#FFFFFF`，字重 `700 (Bold)`，字号 `16px`
-  - 内边距：`11px 13px`
+  - 背景：`#2F6FEB` (Cobalt Blue 填充)
+  - 边框：`1px solid #2F6FEB`
+  - 圆角：`8px` (`--radius-sm`)
+  - 文字颜色：`#FFFFFF` (`--accent-on`)，字重 `600`，字号 `14px`
+  - 内边距：`8px 16px` (高度约 34px)
 - **悬浮外观 (Hover)**：
-  - 背景：填充 `#1EAEDB` (NVIDIA Teal)
-  - 边框：`2px solid #1EAEDB`
-  - 文字颜色：`#FFFFFF` (清晰反白)
-- **按压外观 (Active / Pressed)**：
-  - 背景：填充 `#007FFF` (Electric Blue)
-  - 边框：`1px solid #003EFF`
-  - 文字颜色：`#FFFFFF`
+  - 背景：`color-mix(in oklab, #2F6FEB, white 10%)`
+  - 边框：`color-mix(in oklab, #2F6FEB, white 10%)`
+  - 光标：`pointer`
+- **按压外观 (Active)**：
+  - 背景：`color-mix(in oklab, #2F6FEB, black 10%)`
+  - 边框：`color-mix(in oklab, #2F6FEB, black 10%)`
 
 #### 次要操作按钮 (Secondary Button)
-- **默认外观**：背景 `transparent`，边框 `1px solid #76B900`，圆角 `2px`，文字 `#A7A7A7`
-- **悬浮外观**：边框颜色变亮为 `#BFF230`，文字变白 (`#FFFFFF`)
+- **默认外观**：背景 `#171A21` (`--surface`)，边框 `1px solid #2A2F3A`，圆角 `8px`，文字 `#E2E8F0` (`--fg-2`)
+- **悬浮外观**：背景提亮为 `#1E222B`，边框转为 `rgba(255, 255, 255, 0.16)`，文字 `#F8FAFC`
+- **按压外观**：背景深为 `#13161C`
 
 #### 禁用状态 (Disabled)
-- 边框 `1px solid #5E5E5E`，文字 `#757575`，背景透明，光标呈现 `not-allowed`。
+- 背景 `#171A21`，边框 `1px solid #2A2F3A`，文字 `#64748B` (`--meta`)，光标 `not-allowed`，透明度 `0.5`。
 
 ---
 
 ### 5.2 达芬奇式底部 Dock 栏 (Bottom Workflow Dock)
 
-- **位置与尺寸**：置于应用窗口最底部，高度固定为 `48px`，背景为纯黑底板 (`#000000`)。
-- **边框与分隔**：顶部设置 `1px solid #5E5E5E` 分割细线，面板与 Dock 栏边界严密分明。
+- **位置与尺寸**：置于应用窗口最底部，固定高度 `48px`，背景为次级表面色 `#1E222B` (`--surface-warm`)。
+- **分隔线**：顶部以 `1px solid #2A2F3A` 细线划界。
 - **6 大导航分页项** (`AGENT` / `EDIT` / `MOTION` / `AUDIO` / `IMAGE` / `DELIVER`)：
-  - 排版模式：文字强制采用英汉双显或全大写英文硬件标签风格（字号 `14px`，字重 `700`）。
-  - 默认状态：文字颜色 `#898989`，无背景，2px 边缘微倒角。
-  - Hover 状态：背景微亮为 `#1A1A1A`，文字转白 (`#FFFFFF`)。
+  - 默认状态：文字颜色 `#A7ADBA` (`--muted`)，无背景，`8px` 内圆角。
+  - Hover 状态：背景为 `#232733`，文字转亮 (`#F8FAFC`)。
   - 激活状态 (Active)：
-    - 顶部呈现 `2px solid #76B900`（NVIDIA Green 标志性信号线）。
-    - 文字高亮为 `#76B900`，图标带微弱高亮反馈。
+    - 顶部呈现 `2px solid #2F6FEB`（Cobalt Blue 信号线）。
+    - 文字高亮为 `#2F6FEB`，图标带微弱高亮反馈。
 
 ---
 
 ### 5.3 全局公用时间线组件 (Global Shared Timeline)
 
-- **结构与位置**：紧贴底部 Dock 栏上方，占据下部约 35%~42% 视口高度，跨 6 大页面常驻保活。
+- **结构与位置**：占据视口下方约 38%~42% 空间，跨 6 大页面常驻保活。
 - **底板与轨道槽**：
-  - 时间线底板：`#1A1A1A`。
-  - 轨道槽内部背景：`#000000` (纯黑下沉槽)。
-  - 轨道分隔线：`1px solid #5E5E5E`。
+  - 时间线工作台底板：`#171A21` (`--surface`)。
+  - 轨道槽内部背景：`#0F1115` (`--bg` 深色下沉槽)。
+  - 轨道横向分隔线：`1px solid #2A2F3A`。
 - **片段 (Clips)**：
-  - 圆角一律为 `2px`，四周紧贴无空隙拼接。
-  - 选中片段外框：`1.5px solid #76B900`。
+  - 圆角统一为 `4px` (`--radius-xs`)，拼接精密无杂缝。
+  - 选中片段外框：`1.5px solid #2F6FEB`。
 - **播放指针 (Playhead)**：
-  - 游标头：反向五边形纯正 `#76B900` 实体。
-  - 贯穿多轨纵向线：`1.5px solid #76B900`，播放时以 60FPS 垂直同步平滑移动。
+  - 游标头：反向五边形纯正 `#2F6FEB` 实体。
+  - 纵向贯穿线：`1.5px solid #2F6FEB`，60FPS 丝滑移动。
 - **磁吸对齐指示线 (Snapping Line)**：
-  - 当边缘发生磁吸时，以 `1px dashed #BFF230`（亮绿）纵向贯穿标尺，毫秒级即时对齐反馈。
+  - 磁吸瞬间以 `1px dashed #2F6FEB` 纵向贯穿时间轴标尺与轨道。
 
 ---
 
-### 5.4 面板卡片与容器规范 (Cards & Containers)
+### 5.4 面板卡片与容器规范 (Cards & Panels)
 
-- **面板背景 (Panel Surface)**：`#1A1A1A`。
-- **面板外框 (Border)**：`1px solid #5E5E5E`。
-- **曲率半径 (Radius)**：`2px`。
-- **Header 标题条**：高度 `32px`，底边为 `1px solid #5E5E5E`，标题字号 `14px Bold`，纯白反白。
-- **阴影**：浮动悬浮卡片使用克制的环境阴影 `rgba(0, 0, 0, 0.3) 0px 0px 5px 0px`。
+- **面板表面**：`#171A21` (`--surface`)。
+- **面板外边框**：`1px solid #2A2F3A` (`--border`)。
+- **容器圆角**：`12px` (`--radius-md`)。
+- **Header 标题条**：高度 `36px`，底部带有 `1px solid #2A2F3A` 细分割线，标题为 `14px SemiBold` (`#F8FAFC`)。
+- **悬浮与层级 (Elevation)**：
+  - 平面 (Flat)：默认面板平整无阴影，依靠色阶差区分。
+  - 浮层 (Raised)：右键上下文菜单、浮动对话框、下拉菜单，应用 `box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45)`。
 
 ---
 
 ## 6. Rust + egui 0.36 / wgpu 30.0 代码级映射表
 
-在 Rust 端利用 `egui 0.36` 实现本套 NVIDIA 深色模式规范时，直接映射为以下主题与样式结构体：
+在 Rust 端利用 `egui 0.36` 实现 Neutral Modern 深色规范时，直接映射为以下主题与样式结构体：
 
 ```rust
 use egui::{Color32, CornerRadius, Stroke, Visuals};
 
-/// ClipFlow NVIDIA 官方深色模式设计规范主题
+/// ClipFlow Neutral Modern 深色模式设计规范主题
 pub struct ClipFlowTheme;
 
 impl ClipFlowTheme {
     // ------------------------------------------------------------------------
-    // 1. 核心品牌与信号色 (Brand & Signal)
+    // 1. 核心表面与背景色 (Surfaces & Canvas)
     // ------------------------------------------------------------------------
-    pub const NVIDIA_GREEN: Color32 = Color32::from_rgb(118, 185, 0);     // #76B900 (主信号)
-    pub const ELECTRIC_LIME: Color32 = Color32::from_rgb(191, 242, 48);   // #BFF230 (悬浮与高光)
-    pub const TRUE_BLACK: Color32 = Color32::from_rgb(0, 0, 0);           // #000000 (画布底板)
-    pub const NEAR_BLACK: Color32 = Color32::from_rgb(26, 26, 26);        // #1A1A1A (卡片/面板)
-    pub const PURE_WHITE: Color32 = Color32::from_rgb(255, 255, 255);     // #FFFFFF (纯白字)
+    pub const BG_CANVAS: Color32 = Color32::from_rgb(15, 17, 21);        // #0F1115 (主视口底板)
+    pub const SURFACE: Color32 = Color32::from_rgb(23, 26, 33);          // #171A21 (主面板卡片)
+    pub const SURFACE_WARM: Color32 = Color32::from_rgb(30, 34, 43);     // #1E222B (顶部工具/底部Dock)
+    pub const SURFACE_ACTIVE: Color32 = Color32::from_rgb(35, 39, 51);   // #232733 (选中/激活面板)
 
     // ------------------------------------------------------------------------
-    // 2. 交互状态转移色 (Interactive Transitions)
+    // 2. 文本灰阶 (Foreground Ramp)
     // ------------------------------------------------------------------------
-    pub const BUTTON_HOVER_TEAL: Color32 = Color32::from_rgb(30, 174, 219);  // #1EAEDB (Hover)
-    pub const BUTTON_ACTIVE_BLUE: Color32 = Color32::from_rgb(0, 127, 255);  // #007FFF (Active)
-    pub const LINK_HOVER_BLUE: Color32 = Color32::from_rgb(56, 96, 190);     // #3860BE (Link)
+    pub const TEXT_PRIMARY: Color32 = Color32::from_rgb(248, 250, 252);  // #F8FAFC (主文本)
+    pub const TEXT_SECONDARY: Color32 = Color32::from_rgb(226, 232, 240);// #E2E8F0 (次级正文)
+    pub const TEXT_MUTED: Color32 = Color32::from_rgb(167, 173, 186);    // #A7ADBA (弱化文字/未激活)
+    pub const TEXT_META: Color32 = Color32::from_rgb(100, 116, 139);     // #64748B (刻度/元数据)
 
     // ------------------------------------------------------------------------
-    // 3. 中性灰阶阶梯 (Neutral Grays)
+    // 3. 边框与分割线 (Borders & Dividers)
     // ------------------------------------------------------------------------
-    pub const GRAY_BORDER: Color32 = Color32::from_rgb(94, 94, 94);       // #5E5E5E (分割细线)
-    pub const GRAY_500: Color32 = Color32::from_rgb(117, 117, 117);       // #757575 (占位符/禁用)
-    pub const GRAY_400: Color32 = Color32::from_rgb(137, 137, 137);       // #898989 (次级标尺)
-    pub const GRAY_300: Color32 = Color32::from_rgb(167, 167, 167);       // #A7A7A7 (次级正文)
+    pub const BORDER: Color32 = Color32::from_rgb(42, 47, 58);            // #2A2F3A (主分割线)
+    pub const BORDER_SOFT: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 20); // 8% 白细线
 
     // ------------------------------------------------------------------------
-    // 4. 状态与非编轨道色谱 (Status & Tracks)
+    // 4. 钴蓝交互信号与状态色 (Accent & States)
     // ------------------------------------------------------------------------
-    pub const STATUS_RED: Color32 = Color32::from_rgb(229, 32, 32);       // #E52020 (错误/切除标记)
-    pub const STATUS_RED_BG: Color32 = Color32::from_rgb(61, 15, 15);      // #3D0F0F (切除底色)
-    pub const STATUS_ORANGE: Color32 = Color32::from_rgb(223, 101, 0);     // #DF6500 (预警)
-    pub const STATUS_GREEN_500: Color32 = Color32::from_rgb(63, 133, 0);   // #3F8500 (成功/音频边框)
+    pub const COBALT_ACCENT: Color32 = Color32::from_rgb(47, 111, 235);  // #2F6FEB (主信号/播放指针)
+    pub const ACCENT_HOVER: Color32 = Color32::from_rgb(68, 126, 237);   // 提亮悬浮
+    pub const ACCENT_ACTIVE: Color32 = Color32::from_rgb(42, 100, 212);  // 按下微沉
 
-    pub const TRACK_VIDEO_BG: Color32 = Color32::from_rgb(27, 42, 56);     // #1B2A38 (视频轨深蓝)
-    pub const TRACK_VIDEO_STROKE: Color32 = Color32::from_rgb(56, 96, 190);// #3860BE (视频描边)
-    pub const TRACK_AUDIO_BG: Color32 = Color32::from_rgb(21, 43, 30);     // #152B1E (音频轨暗绿)
-    pub const TRACK_SUBTITLE_BG: Color32 = Color32::from_rgb(53, 40, 16);  // #352810 (字幕暗金)
-    pub const TRACK_HYPERFRAMES_BG: Color32 = Color32::from_rgb(40, 16, 58); // #28103A (动效深紫)
+    pub const STATUS_SUCCESS: Color32 = Color32::from_rgb(23, 163, 74);  // #17A34A (导出完成/音频安全)
+    pub const STATUS_WARN: Color32 = Color32::from_rgb(234, 179, 8);     // #EAB308 (警告/待确认)
+    pub const STATUS_DANGER: Color32 = Color32::from_rgb(220, 38, 38);   // #DC2626 (剪切/错误)
+    pub const STATUS_INFO: Color32 = Color32::from_rgb(2, 132, 199);     // #0284C7 (转写/信息)
 
     // ------------------------------------------------------------------------
-    // 5. NVIDIA 工业精密圆角曲率 (CornerRadius: 2px Standard, 1px Micro)
+    // 5. 非编多轨时间轴色谱 (Timeline Tracks)
     // ------------------------------------------------------------------------
-    pub const RADIUS_PANEL: CornerRadius = CornerRadius::same(2);   // 容器/面板 (2px)
-    pub const RADIUS_CONTROL: CornerRadius = CornerRadius::same(2); // 按钮/输入框 (2px)
-    pub const RADIUS_CLIP: CornerRadius = CornerRadius::same(2);    // 时间轴片段 (2px)
-    pub const RADIUS_MICRO: CornerRadius = CornerRadius::same(1);   // 微型标签徽章 (1px)
+    pub const TRACK_VIDEO_BG: Color32 = Color32::from_rgb(21, 30, 46);    // #151E2E (视频片段深蓝)
+    pub const TRACK_VIDEO_STROKE: Color32 = Color32::from_rgb(43, 69, 112);// #2B4570 (视频片段描边)
+    pub const TRACK_AUDIO_BG: Color32 = Color32::from_rgb(18, 33, 25);    // #122119 (音频片段暗绿)
+    pub const TRACK_AUDIO_STROKE: Color32 = Color32::from_rgb(30, 74, 50);// #1E4A32 (音频描边)
+    pub const TRACK_SUBTITLE_BG: Color32 = Color32::from_rgb(39, 31, 18); // #271F12 (字幕暗金)
+    pub const TRACK_SUBTITLE_STROKE: Color32 = Color32::from_rgb(99, 71, 28); // #63471C (字幕描边)
+    pub const TRACK_MOTION_BG: Color32 = Color32::from_rgb(34, 20, 45);   // #22142D (动效暗紫)
+    pub const TRACK_MOTION_STROKE: Color32 = Color32::from_rgb(82, 41, 116);// #522974 (动效描边)
 
-    /// 一键配置全局 egui::Visuals 样式，严格对齐 NVIDIA 深色规范
+    // ------------------------------------------------------------------------
+    // 6. 几何圆角曲率 (CornerRadius: 12px Panel, 8px Control, 4px Clip)
+    // ------------------------------------------------------------------------
+    pub const RADIUS_PANEL: CornerRadius = CornerRadius::same(12);  // 面板容器 (12px)
+    pub const RADIUS_CONTROL: CornerRadius = CornerRadius::same(8); // 按钮/输入框 (8px)
+    pub const RADIUS_CLIP: CornerRadius = CornerRadius::same(4);    // 时间轴片段/小标牌 (4px)
+
+    /// 一键配置全局 egui::Visuals 样式，严格对齐 Neutral Modern 深色规范
     pub fn apply_to(ctx: &egui::Context) {
         let mut visuals = Visuals::dark();
 
-        // 画布与面板底色
-        visuals.panel_fill = Self::TRUE_BLACK;
-        visuals.window_fill = Self::NEAR_BLACK;
-        visuals.window_stroke = Stroke::new(1.0, Self::GRAY_BORDER);
+        // 画布底板与主面板底色
+        visuals.panel_fill = Self::BG_CANVAS;
+        visuals.window_fill = Self::SURFACE;
+        visuals.window_stroke = Stroke::new(1.0, Self::BORDER);
         visuals.window_corner_radius = Self::RADIUS_PANEL;
 
-        // 默认控件外观 (2px 工业工控锐角，默认透明/深黑)
-        visuals.widgets.inactive.bg_fill = Self::NEAR_BLACK;
-        visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Self::GRAY_BORDER);
+        // 默认控件外观 (8px 圆角，深色卡片表面)
+        visuals.widgets.inactive.bg_fill = Self::SURFACE;
+        visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, Self::BORDER);
         visuals.widgets.inactive.corner_radius = Self::RADIUS_CONTROL;
-        visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, Self::PURE_WHITE);
+        visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, Self::TEXT_PRIMARY);
 
-        // 悬浮状态：向 NVIDIA Teal 转移
-        visuals.widgets.hovered.bg_fill = Self::BUTTON_HOVER_TEAL;
-        visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Self::BUTTON_HOVER_TEAL);
+        // 悬浮状态：向亮色微调并高亮细边框
+        visuals.widgets.hovered.bg_fill = Self::SURFACE_WARM;
+        visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Self::BORDER_SOFT);
         visuals.widgets.hovered.corner_radius = Self::RADIUS_CONTROL;
-        visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, Self::PURE_WHITE);
+        visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, Self::TEXT_PRIMARY);
 
-        // 激活状态：向 Electric Blue 转移
-        visuals.widgets.active.bg_fill = Self::BUTTON_ACTIVE_BLUE;
-        visuals.widgets.active.bg_stroke = Stroke::new(1.0, Color32::from_rgb(0, 62, 255));
+        // 激活状态：加深底色
+        visuals.widgets.active.bg_fill = Self::SURFACE_ACTIVE;
+        visuals.widgets.active.bg_stroke = Stroke::new(1.0, Self::COBALT_ACCENT);
         visuals.widgets.active.corner_radius = Self::RADIUS_CONTROL;
-        visuals.widgets.active.fg_stroke = Stroke::new(1.0, Self::PURE_WHITE);
+        visuals.widgets.active.fg_stroke = Stroke::new(1.0, Self::TEXT_PRIMARY);
 
-        // 选择与高亮状态：注入 NVIDIA 绿色信号
-        visuals.selection.bg_fill = Color32::from_rgba_premultiplied(118, 185, 0, 40);
-        visuals.selection.stroke = Stroke::new(1.5, Self::NVIDIA_GREEN);
+        // 选中高亮状态：注入钴蓝信号
+        visuals.selection.bg_fill = Color32::from_rgba_premultiplied(47, 111, 235, 45);
+        visuals.selection.stroke = Stroke::new(1.5, Self::COBALT_ACCENT);
 
         ctx.set_visuals(visuals);
     }
@@ -315,9 +319,10 @@ impl ClipFlowTheme {
 ## 7. 与各工作流文档的联动对齐标准
 
 - **剪辑工作台布局 ([`edit-layout-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/edit-layout-spec.md))**：
-  - PR 四区分屏外框与工具栏按钮采用统一的 `2px` 工业倒角。
-  - 面板之间以 `1px solid #5E5E5E` 划分，内部底色为 `#1A1A1A`。
+  - PR 四区分屏外框与主容器采用 `12px` 圆角，内部操作按钮为 `8px`。
+  - 面板之间以 `1px solid #2A2F3A` 划分，工作区底盘为 `#0F1115`，卡片表面为 `#171A21`。
+  - 时间线播放指针与吸附参考线统一采用 Cobalt Blue (`#2F6FEB`)。
 - **辅助工作流页面 ([`workflow-pages-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/workflow-pages-spec.md))**：
-  - 【声音】混音台推子与电平表色谱：$-60\text{dB} \sim -12\text{dB}$ 为电能绿 (`#76B900`)，$-12\text{dB} \sim -2\text{dB}$ 为警告橙黄 (`#DF6500`)，$\ge -2\text{dB}$ 为过载红 (`#E52020`)。
-  - 【图片】封面画布与安全框指示线统一遵循 NVIDIA 亮绿高亮 (`#BFF230`)。
-  - 【导出】主渲染 CTA 按钮采用 NVIDIA 纯正绿色边框 (`2px solid #76B900`)。
+  - 【声音】混音台推子与电平表色谱：$-60\text{dB} \sim -12\text{dB}$ 为安全绿 (`#17A34A`)，$-12\text{dB} \sim 0\text{dB}$ 为警告黄 (`#EAB308`)，$\ge 0\text{dB}$ 为过载红 (`#DC2626`)。
+  - 【图片】封面画布与选中外框统一遵循 Cobalt Blue (`#2F6FEB`) 信号指示。
+  - 【导出】主渲染 CTA 按钮采用标准钴蓝填充 (`#2F6FEB`) 搭配纯白文字 (`#FFFFFF`)。
