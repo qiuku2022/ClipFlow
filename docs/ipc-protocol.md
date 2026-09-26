@@ -37,25 +37,65 @@
   "status": "success",
   "data": {
     "task_id": "task-asr-20260923-01",
-    "audio_duration_s": 320.5
+    "audio_duration_s": 320.5,
+    "chunk_count_estimated": 160
   }
 }
 ```
 
-#### 实时流式事件 (Python $\to$ Rust Event)
+#### 实时分片增量流式事件 (Python $\to$ Rust `asr.chunk_stream`)
+为杜绝长视频 ASR 阻塞等待全量结果，Python Worker 边推理边流式推送增量切片，驱动 Rust 宿主在时间轴 C1 轨实时铺排：
 ```json
 {
-  "event": "asr.segment",
-  "task_id": "task-asr-20260923-01",
+  "jsonrpc": "2.0",
+  "method": "asr.chunk_stream",
+  "params": {
+    "task_id": "task-asr-20260923-01",
+    "chunk_index": 12,
+    "progress_percent": 7.5,
+    "is_last_chunk": false,
+    "data": {
+      "start": 12.35,
+      "end": 15.80,
+      "text": "今天我们来聊一下如何用 Rust 制作现代桌面软件。",
+      "words": [
+        {"word": "今天", "start": 12.35, "end": 12.80},
+        {"word": "我们", "start": 12.80, "end": 13.10},
+        {"word": "来聊一下", "start": 13.10, "end": 13.90},
+        {"word": "如何用", "start": 13.90, "end": 14.30},
+        {"word": "Rust", "start": 14.30, "end": 14.80},
+        {"word": "制作现代桌面软件", "start": 14.80, "end": 15.80}
+      ]
+    }
+  }
+}
+```
+
+#### 抢占式任务取消接口：`asr.cancel`
+当用户在转写中途点击“取消”或关闭/切换工程时，Rust 宿主在当前命名管道发送取消信令，Python 端在当前 2 秒音频 chunk 边界平稳跳出循环，释放 PyTorch/CUDA 显存：
+
+```json
+// 请求 (Rust -> Python)
+{
+  "jsonrpc": "2.0",
+  "id": "req-1003",
+  "method": "asr.cancel",
+  "params": {
+    "task_id": "task-asr-20260923-01",
+    "force": false
+  }
+}
+
+// 响应 (Python -> Rust)
+{
+  "jsonrpc": "2.0",
+  "id": "req-1003",
+  "status": "success",
   "data": {
-    "start": 12.35,
-    "end": 15.80,
-    "text": "今天我们来聊一下如何用 Rust 制作现代桌面软件。",
-    "words": [
-      {"word": "今天", "start": 12.35, "end": 12.80},
-      {"word": "我们", "start": 12.80, "end": 13.10},
-      {"word": "来聊一下", "start": 13.10, "end": 13.90}
-    ]
+    "task_id": "task-asr-20260923-01",
+    "processed_chunks": 12,
+    "processed_duration_s": 24.0,
+    "message": "Task cancelled cleanly, inference context purged"
   }
 }
 ```
