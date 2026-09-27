@@ -103,7 +103,7 @@ ClipFlow 支持本地大模型与主流云端 API，统一在主进程安全配�
 Agent 操作公用时间线时，必须且仅能通过以下结构化工具调用。
 
 > **时间轴防腐层契约 (ACL Guardrail)**：  
-> 工具调用参数与外部通信协议中声明的所有时间参数（如 `start_time_seconds`, `duration_seconds`）统一使用人类与 LLM 习惯的十进制浮点秒（`f64`）。当指令被传递至 Rust 时间轴引擎时，**统一由 `AgentTimelineAcl`（详见 [`timeline-data-model.md` 第 1.4 节](file:///d:/Work/Dev/ClipFlow/docs/timeline-data-model.md#L130)）在进入事务命令栈前执行严格的帧网格硬吸附（`RationalTime`）与 $\le 1$ 帧微隙自动缝合**，保证切片空洞坏帧率严格为 0。
+> 工具调用参数与外部通信协议中声明的所有时间参数（如 `start_time_seconds`, `duration_seconds`）统一使用人类与 LLM 习惯的十进制浮点秒（`f64`）。当指令被传递至 Rust 时间轴引擎时，**统一由 `AgentTimelineAcl`（详见 [`timeline-data-model.md` 第 1.4 节](timeline-data-model.md#14-agent-防腐层-acl-与吸附引擎-agenttimelineacl)）在进入事务命令栈前执行严格的帧网格硬吸附（`RationalTime`）与 $\le 1$ 帧微隙自动缝合**，保证切片空洞坏帧率严格为 0。
 
 ### 3.1 工具清单定义 (JSON Schema)
 
@@ -129,6 +129,11 @@ Agent 操作公用时间线时，必须且仅能通过以下结构化工具调�
           },
           "required": ["start_time_seconds", "end_time_seconds", "reason"]
         }
+      },
+      "target_track_indices": {
+        "type": "array",
+        "items": { "type": "integer" },
+        "description": "波纹联动生效的轨道索引列表；默认仅联动主视频/主音频与字幕轨（即 V1, A1, C1），自动保护背景音乐轨（A2）及其他非主讲音画轨不被误切截断"
       }
     },
     "required": ["cuts"]
@@ -256,6 +261,67 @@ pub struct PlanStats {
     pub projected_duration_s: f64,
     pub cut_duration_s: f64,
     pub cuts_count: usize,
+}
+
+/// 剪辑节奏风格
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RhythmStyle {
+    /// 紧凑快节奏（适合短视频 Hook 开头、冲突点）
+    FastPaced,
+    /// 平稳叙事（适合主干观点阐述、案例展开）
+    Steady,
+    /// 高潮强调（适合核心金句、总结升华）
+    Climax,
+}
+
+/// 建议切除片段的语义分类
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CutType {
+    /// 物理停顿/气口
+    Silence,
+    /// 无意义语气词/口头禅（如“那个”、“然后”）
+    FillerWord,
+    /// 结巴与口误重复
+    Repetition,
+    /// 跑题废话或离题段落
+    OffTopic,
+}
+
+/// 导演建议挂载的动态视觉包装 (对齐 timeline_attach_hyperframes)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuggestedGraphic {
+    pub graphic_id: Uuid,
+    /// 动效模板标识（如 "lower_third_tech", "data_line_chart"）
+    pub template_id: String,
+    /// 在时间轴上的起始秒数 (f64)
+    pub timeline_start_seconds: f64,
+    /// 持续时长秒数 (f64)
+    pub duration_seconds: f64,
+    /// 模板注入参数（文本内容、高亮配色、数值等）
+    pub template_parameters: serde_json::Value,
+    /// 建议理由与包装意图
+    pub rationale: String,
+    /// 默认是否勾选采纳
+    pub approved_by_default: bool,
+}
+
+/// 导演建议配乐方案 (对齐 timeline_configure_bgm)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuggestedAudioPlan {
+    /// 建议选配的 BGM 素材资产 ID（若未指定则由用户手动挑选）
+    pub bgm_asset_id: Option<Uuid>,
+    /// 推荐的情绪与风格标签（如 "Upbeat", "Cinematic", "Minimal Lo-Fi"）
+    pub mood_tag: String,
+    /// 默认基础音量 (dB，如 -14.0)
+    pub base_volume_db: f32,
+    /// 口播出现时的人声避让音量 (dB，如 -26.0)
+    pub ducking_volume_db: f32,
+    /// 淡入时间（秒）
+    pub fade_in_seconds: f32,
+    /// 淡出时间（秒）
+    pub fade_out_seconds: f32,
+    /// 默认是否启用 BGM 铺设
+    pub enabled_by_default: bool,
 }
 ```
 

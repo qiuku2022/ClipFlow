@@ -56,7 +56,7 @@ Neutral Modern 深色模式遵循 OpenDesign 规范与专业数字视音频工�
 
 ## 3. 色彩体系与 Tokens (Color Palette & Semantic Roles)
 
-本地设计体系镜像保存于 [`.local/design-system/neutral-modern/`](file:///d:/Work/Dev/ClipFlow/.local/design-system/neutral-modern/)。
+本地设计体系镜像保存于 [`.local/design-system/neutral-modern/`](../.local/design-system/neutral-modern/)。
 
 ### 3.1 核心中性色与表面层级 (Surfaces & Canvas)
 
@@ -320,11 +320,11 @@ impl ClipFlowTheme {
 
 ## 7. 与各工作流文档的联动对齐标准
 
-- **剪辑工作台布局 ([`edit-layout-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/edit-layout-spec.md))**：
+- **剪辑工作台布局 ([`edit-layout-spec.md`](edit-layout-spec.md))**：
   - PR 四区分屏外框与主容器采用 `12px` 圆角，内部操作按钮为 `8px`。
   - 面板之间以 `1px solid #2A2F3A` 划分，工作区底盘为 `#0F1115`，卡片表面为 `#171A21`。
   - 时间线播放指针与吸附参考线统一采用 Cobalt Blue (`#2F6FEB`)。
-- **辅助工作流页面 ([`workflow-pages-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/workflow-pages-spec.md))**：
+- **辅助工作流页面 ([`workflow-pages-spec.md`](workflow-pages-spec.md))**：
   - 【声音】混音台推子与电平表色谱：$-60\text{dB} \sim -12\text{dB}$ 为安全绿 (`#17A34A`)，$-12\text{dB} \sim 0\text{dB}$ 为警告黄 (`#EAB308`)，$\ge 0\text{dB}$ 为过载红 (`#DC2626`)。
   - 【图片】封面画布与选中外框统一遵循 Cobalt Blue (`#2F6FEB`) 信号指示。
   - 【导出】主渲染 CTA 按钮采用标准钴蓝填充 (`#2F6FEB`) 搭配纯白文字 (`#FFFFFF`)。

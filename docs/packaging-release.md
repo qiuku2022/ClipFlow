@@ -32,14 +32,15 @@ ClipFlow_Release/
 │   ├── cuda_runtime/               # [按需下载] CUDA 12 / cuDNN 动态链接库 (.dll)
 │   ├── hyperframes_runtime/        # HyperFrames 离屏渲染轻量级环境
 │   │   ├── node.exe                # Node.js 24 LTS 运行时
-│   │   └── package.json
+│   │   ├── package.json
+│   │   └── chromium/               # 精简无头 Chromium (~70MB，仅保留无头渲染核心与必备 dll)
 │   ├── bin/
 │   │   ├── ffmpeg.exe              # FFmpeg 9.0.2
 │   │   └── ffprobe.exe             # FFprobe 9.0.2
 │   └── templates/                  # 预置动效模板库 (HTML/CSS/JS)
 ```
 
-> **存储分离说明**：依据 [cache-and-storage-spec.md](file:///d:/Work/Dev/ClipFlow/docs/cache-and-storage-spec.md)“双轨分离制”，大体积 AI 模型严禁随软件安装包本地打包或随工程目录重复复制，统一集中寻址于 `%LOCALAPPDATA%\ClipFlow\models\faster-whisper-large-v2\`。
+> **存储分离说明**：依据 [cache-and-storage-spec.md](cache-and-storage-spec.md)“双轨分离制”，大体积 AI 模型严禁随软件安装包本地打包或随工程目录重复复制，统一集中寻址于 `%LOCALAPPDATA%\ClipFlow\models\faster-whisper-large-v2\`。
 
 ### 2.1 硬件感知按需扩展机制 (On-Demand Acceleration Packs)
 - **GPU 加速包自动识别**：
@@ -48,7 +49,7 @@ ClipFlow_Release/
 - **国内高速镜像源与断点续传**：
   `whisper-large-v2` 模型权重（INT8 约 1.5GB）与 CUDA 加速包统一接入国内高速 CDN 节点与阿里 ModelScope 开源镜像，支持断点续传与后台静默校验（SHA-256），下载中途退出可随时恢复。
 - **HyperFrames 动效运行时治理**：
-  动效层由轻量无头 Chromium 双 Worker（`PingPongPoolManager`）驱动，启动配置硬限 `--force-gpu-mem-available-mb=512` 与 120 帧周期内存主动清洗，单帧 Raw RGBA 直灌 wgpu 延迟 $\le 1.5\text{ms}$，兼顾超轻预览与母带级逐帧确定性。
+  动效层由 `resources/hyperframes_runtime/chromium/` 裁切版无头集群双 Worker（`PingPongPoolManager`）驱动（剔除所有不必要的音视频解码器与语言包，体积压减至 ~70MB），启动配置硬限 `--force-gpu-mem-available-mb=512` 与 120 帧周期内存主动清洗，单帧 Raw RGBA 直灌 wgpu 延迟 $\le 1.5\text{ms}$，兼顾超轻预览与母带级逐帧确定性。
 
 ---
 
@@ -62,6 +63,38 @@ ClipFlow_Release/
 ---
 
 ## 4. 自动更新与热补丁策略 (Auto-Update)
-- 主进程启动时静默向更新服务检查 `latest.json`。
-- 支持差量补丁（仅更新 `ClipFlow.exe` 或动效模板库）与全量覆盖升级。
+
+### 4.1 更新清单协议 (`latest.json`)
+主进程启动时以非阻塞后台任务向版本 CDN 请求 `latest.json`：
+
+```json
+{
+  "version": "1.1.0",
+  "min_compatible_version": "1.0.0",
+  "release_date": "2026-10-15T00:00:00Z",
+  "mandatory": false,
+  "changelog": "1. 提升 4K 时间轴多轨缩放流畅度\n2. 新增 3 款科技风动态角标模板",
+  "packages": {
+    "full": {
+      "url": "https://cdn.clipflow.dev/releases/ClipFlow-Setup-1.1.0.exe",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "size_bytes": 245367800
+    },
+    "differential": {
+      "url": "https://cdn.clipflow.dev/releases/diff/diff-1.0.0-to-1.1.0.pck",
+      "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+      "size_bytes": 18452000
+    }
+  }
+}
+```
+
+### 4.2 提权替换与失败自动回滚
+1. **下载与校验**：优先下载增量差量包（若版本跨度过大则回退全量包），下载完毕在独立临时工作区完成 SHA-256 哈希完整性校验。
+2. **原子无锁热替换**：
+   - 用户点击“立即重启更新”后，主进程拉起独立的轻量级提权更新辅助器 `resources/bin/updater.exe` 并正常退出自身；
+   - `updater.exe` 等待主进程完全释放文件句柄后，将原主程序备份重命名为 `ClipFlow.exe.bak`，再将新二进制覆写替换；
+3. **回滚容灾策略**：
+   - 替换完成后自动启动新版 `ClipFlow.exe --health-check`；
+   - 若在启动后 3 秒内发生崩溃、缺失依赖或 panic，`updater.exe` 立即恢复 `ClipFlow.exe.bak` 备份并告警提示，确保用户生产环境 100% 可用。
 

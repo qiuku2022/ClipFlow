@@ -20,6 +20,7 @@
 | 目的：强随工程绑定，移动移动硬盘或项目文件夹即带走缓存；删除后可随时无损重建；零污染系统盘。           |
 |                                                                                                    |
 | ├── proxies/             # 540p 监视器实时播放快速代理切片                                            |
+| ├── thumbnails/          # 视频缩略图金字塔切片 (.bin, 72px 高度, 3 级 LOD)                           |
 | ├── waveforms/           # 音频波形多级 LOD 峰值二进制 (.peak)                                       |
 | ├── hyperframes/         # 动效离屏确定性渲染临时帧缓冲 (RGBA Raw)                                    |
 | ├── wal/                 # 预写日志 (session.wal)                                                  |
@@ -52,12 +53,14 @@ D:/Videos/202609_Interview/
     └── a1b2c3d4/                              # 工程实例缓存根
         ├── proxies/
         │   └── Footage_01_proxy_540p.mp4      # 1/4 代理视频 (NV12 / Fast H.264)
+        ├── thumbnails/
+        │   └── Footage_01_1000.bin            # 视频金字塔缩略图 (WebP/RGB565 块)
         ├── waveforms/
         │   └── Footage_01_A1.peak             # 音频峰值波形缓存 (多分辨率 LOD)
         ├── hyperframes/
-        │   └── seq_01/
-        │       ├── frame_0001.raw             # 离屏动效 RGBA 原始帧缓存
-        │       └── frame_0002.raw
+        │   └── layer_01/
+        │       ├── frame_000001.raw           # 离屏动效 RGBA 原始帧缓存
+        │       └── frame_000002.raw
         ├── wal/
         │   └── session.wal                    # 增量事务预写日志
         └── autosave/
@@ -70,8 +73,9 @@ D:/Videos/202609_Interview/
 | 缓存类型 | 存储格式 / 编码 | 命名规范 | 生成时机 | 重建与恢复策略 |
 | :--- | :--- | :--- | :--- | :--- |
 | **540p 代理** | H.264 / NV12 / Ultrafast / 无音频 | `{AssetHash}_proxy_540p.mp4` | 媒体首次导入或后台静默生成 | 若丢失，监视器降级软解或按需重新转码 |
+| **缩略图金字塔** | 轻量 WebP / RGB565 压缩块 (72px 高) | `{AssetHash}_{StepMs}.bin` | 媒体导入后后台低优先级线程抽帧 | 若丢失，在空闲线程池按需重新抽帧恢复 |
 | **音频波形** | 自研定宽二进制 (含 Min/Max 浮点) | `{AssetHash}_{TrackId}.peak` | 导入媒体时快速扫描音频流 | 若丢失，在 500ms 内重新提取并流式重绘 |
-| **动效帧缓冲**| 裸 Raw RGBA (紧凑字节流) | `hf_{LayerId}_f{FrameIdx}.raw`| HyperFrames Worker 离屏渲染 | 若丢失，依据 HTML/CSS/JS 确定性再次求值 |
+| **动效帧缓冲**| 裸 Raw RGBA (紧凑字节流) | `{LayerId}/frame_{FrameIdx:06d}.raw` | HyperFrames Worker 离屏渲染 | 若丢失，依据 HTML/CSS/JS 确定性再次求值 |
 | **WAL 日志** | 二进制追加流 (Append-only) | `session.wal` | 每次 `TimelineCommand` 提交 | 启动异常检测时读取重放，正常保存后清空 |
 | **历史快照** | `.clipflow` 标准格式 (Zstandard) | `{Name}_{YYYYMMDD_HHMMSS}.clipflow` | 后台定时器（每 3 分钟触发） | 循环覆盖，磁盘严格锁定最新 10 份 |
 
@@ -104,7 +108,7 @@ D:/Videos/202609_Interview/
 ### 4.1 配额警戒线与自动淘汰规则
 - **全局软上限配额**：默认设定为 **50 GB**（用户可在偏好设置中调至 20GB ~ 200GB 或无限制）。
 - **淘汰优先级（LRU 最少使用原则）**：
-  1. **第一优先级清退**：`hyperframes/` 离屏渲染切片（成本低，可秒级重新求值）；
+  1. **第一优先级清退**：`hyperframes/` 离屏渲染切片与 `thumbnails/` 视频缩略图金字塔（生成成本低，可秒级重新求值与按需重抽帧）；
   2. **第二优先级清退**：`proxies/` 代理视频文件；
   3. **受保护区（严禁自动清退）**：`waveforms/`（波形）、`wal/`（未保存日志）、`autosave/`（历史工程）。
 

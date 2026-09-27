@@ -32,7 +32,7 @@
    ```
 2. 确保已安装 Visual Studio Build Tools（勾选 "C++ 桌面开发"）。
 
-### 2.2 初始化 Python 计算服务环境 (uv)
+### 2.2 初始化 Python 计算服务环境 (uv) 与 CUDA 加速
 在项目根目录下通过 PowerShell 7 执行：
 ```powershell
 # 1. 创建 Python 3.13 虚拟环境
@@ -43,6 +43,9 @@ uv sync
 # 或开发模式可编辑安装：uv pip install -e .
 ```
 
+> **GPU 加速运行依赖 (CUDA / cuDNN)**：  
+> 若需启用 GPU 极速转写（$\ge 12\times$ 实时倍速），Windows 主机须安装 **CUDA Toolkit 12.x** 与 **cuDNN 9.x for CUDA 12**，并确保 `cudnn64_*.dll` 和 `cublas64_*.dll` 所在目录加入系统 `PATH` 或置于 `resources/cuda_runtime/`；无 CUDA 环境时系统自动降级回退至多线程 CPU 模式。
+
 ### 2.3 配置 HyperFrames 动效环境 (Node.js 24)
 ```powershell
 # 检查 Node.js 24 LTS 环境
@@ -52,12 +55,22 @@ node -v
 npm install
 ```
 
-### 2.4 配置 FFmpeg 9.0.2
-确保系统 `PATH` 或项目内置 `bin/` 目录中包含 `ffmpeg.exe` 与 `ffprobe.exe`，版本必须严格匹配 9.0.2：
-```powershell
-ffmpeg -version
-# 期望首行输出：ffmpeg version 9.0.2 ...
-```
+### 2.4 配置 FFmpeg 9.0.2 运行与编译环境
+Rust 媒体管线 crate（`clipflow-media`）通过 `ffmpeg-sys-next` 绑定底层 C API，既需要命令行二进制，也需要 C 头文件与导入库：
+
+1. **运行时二进制 (`ffmpeg.exe` / `ffprobe.exe`)**：  
+   确保系统 `PATH` 或项目内置 `resources/bin/` 目录中包含 FFmpeg 9.0.2 可执行程序：
+   ```powershell
+   ffmpeg -version
+   # 期望首行输出：ffmpeg version 9.0.2 ...
+   ```
+2. **Rust 编译期 C 开发库与环境变量**：  
+   下载 FFmpeg 9.0.2 Dev/Shared 开发包（包含 `include/` 与 `lib/` 目录），并配置环境变量指向其根目录：
+   ```powershell
+   # 设置 FFmpeg SDK 根目录（替换为本地实际解压路径）
+   [System.Environment]::SetEnvironmentVariable("FFMPEG_DIR", "C:\ffmpeg-9.0.2-full_build-shared", "User")
+   # 确保 bin 目录包含相关 avcodec-*.dll, avformat-*.dll 在 PATH 中
+   ```
 
 ---
 

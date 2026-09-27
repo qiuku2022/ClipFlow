@@ -216,18 +216,21 @@ export const CHROMIUM_LOCKED_FLAGS = [
 
 ## 4. 双通道架构：快速低延迟预览 vs 离屏母带输出
 
+> **概念消歧说明 (Channel vs Mode)**：  
+> 此处划分的“实时交互预览通道 (`LivePreviewChannel`)”与“离线母带导出通道 (`OfflineExportChannel`)”是指**上层用户交互视窗与业务渲染入口**；而 [`ipc-protocol.md` 第 3 节](ipc-protocol.md) 中划分的 `StreamingSharedMemory` 与 `OfflineBakeFile` 是指**底层像素数据在跨进程间的传输机制**。两者相互正交，避免用单纯字母别名（通道 A/B vs 模式 A/B）造成沟通歧义。
+
 ```mermaid
 flowchart LR
     TemplateSrc["HTML/CSS/JS 模板"] --> SwitchMode{使用场景}
 
-    subgraph Channel_Preview ["通道 A: 实时剪辑低延迟预览"]
+    subgraph Channel_Preview ["LivePreviewChannel: 实时剪辑低延迟预览"]
         WebviewServer["轻量本地 HTTP 静态服务"]
         WebviewPreview["嵌入式 WebView / 局部窗口"]
         ParamsLive["参数双向热绑定 (Live React)"]
         WebviewServer --> WebviewPreview <--> ParamsLive
     end
 
-    subgraph Channel_Export ["通道 B: 离屏逐帧母带导出"]
+    subgraph Channel_Export ["OfflineExportChannel: 离屏逐帧母带导出"]
         HeadlessCluster["Headless Chromium 实例池"]
         RGBA_Stream["Raw RGBA 像素流 (含 Alpha)"]
         FFmpegMux["FFmpeg 9.0.2 GPU 图层混合"]
@@ -238,11 +241,11 @@ flowchart LR
     SwitchMode -->|导出母带/预渲染| Channel_Export
 ```
 
-### 4.1 通道 A：实时剪辑低延迟预览
+### 4.1 交互预览通道 (`LivePreviewChannel`)
 - **目标**：用户在【动画】页面调节文字或参数时，无需等待后端逐帧渲染，直接以原生 60fps 实时热更新预览。
 - **机制**：由轻量本地服务承载，参数变更通过 WebSocket 毫秒级推送到 DOM，实现“所改即所见”。
 
-### 4.2 通道 B：离屏母带生产导出
+### 4.2 离线导出通道 (`OfflineExportChannel`)
 - **目标**：最终导出成片或用户在 PR 剪辑台进行复杂多轨堆叠时，提供广播级无损透明图层。
 - **机制**：Node.js 子进程启动无头集群逐帧步进输出，送入 `wgpu` 离屏合成管线与视频主轨（V1）完美贴合。
 

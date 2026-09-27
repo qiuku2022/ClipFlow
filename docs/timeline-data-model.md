@@ -381,6 +381,60 @@ pub struct Clip {
     /// 是否被禁用（按 D 键静音/隐藏单片段）
     pub disabled: bool,
 }
+
+> **片段变速与有理数时间映射公式 (Time Warping & Rational Mapping)**：  
+> 1. **有效时长换算**：时间轴跨度与素材源跨度之间满足严格有理数等式：  
+>    $$\text{timeline\_range.duration} = \frac{\text{source\_range.duration}}{|speed|}$$  
+>    在 Rust 实现中，通过将浮点 `speed` 转换为有理数比例（如 $1.5 = 3/2$），以纯整数乘除运算更新 `timeline_range`，杜绝累积微秒级帧舍入误差。  
+> 2. **取样时间戳映射 ($t_{\text{timeline}} \to t_{\text{source}}$)**：  
+>    - **正放 ($speed > 0$)**：取样点随时间轴正向推进：  
+>      $$t_{\text{source}} = \text{source\_range.start} + (t_{\text{timeline}} - \text{timeline\_range.start}) \times speed$$  
+>    - **倒放 ($speed < 0$)**：取样点以素材出点向入点反向溯源：  
+>      $$t_{\text{source}} = \text{source\_range.end} - (t_{\text{timeline}} - \text{timeline\_range.start}) \times |speed|$$  
+
+/// 片段滤镜与特效实例
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClipFilter {
+    pub id: Uuid,
+    pub name: String,
+    /// 是否激活生效（UI 旁路开关）
+    pub enabled: bool,
+    /// 滤镜类型与专属属性
+    pub kind: ClipFilterKind,
+}
+
+/// 核心视频滤镜分类与动画参数
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ClipFilterKind {
+    /// 画面裁剪（上下左右内缩比例 0.0 ~ 1.0）
+    Crop {
+        top: Animatable<f32>,
+        bottom: Animatable<f32>,
+        left: Animatable<f32>,
+        right: Animatable<f32>,
+    },
+    /// 基础色彩与曝光调节
+    ColorAdjustment {
+        exposure: Animatable<f32>,   // 曝光补偿 (-5.0 ~ +5.0 EV)
+        contrast: Animatable<f32>,   // 对比度 (-1.0 ~ +1.0)
+        saturation: Animatable<f32>, // 饱和度 (0.0 ~ 2.0, 1.0 为原始)
+        temperature: Animatable<f32>,// 色温 (-1.0 ~ +1.0)
+    },
+    /// 3D LUT 色彩查找表
+    Lut {
+        lut_asset_id: Uuid,
+        intensity: Animatable<f32>,  // 混合强度 0.0 ~ 1.0
+    },
+    /// 高斯模糊
+    GaussianBlur {
+        radius: Animatable<f32>,     // 模糊半径 (像素)
+    },
+    /// 自定义着色器/扩展滤镜 (M3+ 扩展点)
+    Custom {
+        shader_id: String,
+        params: serde_json::Value,
+    },
+}
 ```
 
 ### 2.3 关键帧动画系统 (`Animatable<T>`)
@@ -519,10 +573,25 @@ pub struct Track {
     pub clips: Vec<Clip>,
 }
 
+/// 画布分辨率规格
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CanvasSize {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl CanvasSize {
+    pub const P1080_16_9: Self = Self { width: 1920, height: 1080 };
+    pub const P1080_9_16: Self = Self { width: 1080, height: 1920 };
+    pub const P4K_16_9: Self = Self { width: 3840, height: 2160 };
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Sequence {
     pub id: Uuid,
     pub name: String,
+    /// 序列目标画幅分辨率
+    pub resolution: CanvasSize,
     pub timebase: u32,
     pub fps_denominator: u32,
     pub playhead: RationalTime,
@@ -532,6 +601,10 @@ pub struct Sequence {
     pub master_bus: MasterBusProperties,
 }
 ```
+
+> **设计决策与类图映射说明 (Design Rationale & Model Mapping)**：  
+> 1. **画幅分辨率与时间基**：概念模型类图中的 `resolution` 由 `CanvasSize` 明确承载（预置 1080P/4K 横竖屏常量）；类图中的概念帧率（`FrameRate`）在 Rust 中具体化为有理数基数 `timebase` 与 `fps_denominator`（如 60000 / 1001 对应 59.94 FPS），确保时间轴全局帧计算绝对无累积浮点漂移。  
+> 2. **轨道单列表物理存储**：类图中概念性区分了 `video_tracks`、`audio_tracks`、`subtitle_tracks` 与 `effect_tracks`，但在 Rust 物理实现中统一合并为单一有序列表 `tracks: Vec<Track>`，由 `Track.kind` 枚举区分。这种设计保持了图层上下层叠覆盖次序与渲染管线遍历的单一真实源（SSOT），上层业务可通过 `sequence.tracks.iter().filter(|t| t.kind == TrackKind::Video)` 投影过滤。
 
 ---
 
@@ -559,8 +632,20 @@ pub trait TimelineCommand: Send + Sync {
 - **回退**：移除新插入的后半段，将原片段的 `timeline_range.duration` 与 `source_range.duration` 恢复原始长度。
 
 #### ② 波纹删除命令：`RippleDeleteCommand`
-- **执行**：删除指定片段，并在该轨道及所有未锁定轨道上，将所有处于该片段之后的 Clip 向左平移 `deleted_duration`。
+- **执行**：删除指定片段，并在受影响的联动轨道上，将所有处于该片段之后的 Clip 向左平移 `deleted_duration`。
 - **回退**：将删除的片段恢复至原位，并将后续所有片段向右回移等长区间。
+- **多轨波纹保护机制**：支持传入联动轨道范围白名单 `affected_track_ids`；若未显式指定，默认仅联动该片段所在轨道及未锁定的主音画/字幕轨，独立背景音乐轨（A2）及显式锁定轨道绝不发生平移，杜绝音乐被剪碎错位。
+
+```rust
+pub struct RippleDeleteCommand {
+    pub target_clip_id: Uuid,
+    /// 联动波纹平移的轨道白名单（None 表示默认策略：仅联动当前轨及未锁定的主画/主音/字幕轨）
+    pub affected_track_ids: Option<Vec<Uuid>>,
+    /// 内部执行暂存的状态数据（用于精确回退）
+    deleted_clip: Option<Clip>,
+    shifted_clips: Vec<(Uuid, RationalTime)>,
+}
+```
 
 #### ③ 复合事务命令：`CompoundCommand`
 - 用于将 Agent 的一次多步决策（如：“剔除 10 处口播停顿并自动对齐”）打包为单一事务，用户按一次 `Ctrl + Z` 即可一次性整体回退。
@@ -657,7 +742,7 @@ impl TimelineHistory {
 ### 4.3 自动保存与预写日志 (Auto-Save & WAL)
 
 - **防崩溃日志 (WAL)**：每执行一次 `TimelineCommand`，主进程以追加写入（Append-only）形式向临时工作目录记录 `session.wal`。
-- **定时全量快照**：每隔 3 分钟后台静默序列化一份全量工程至第一轨本地缓存目录 `.clipflow_cache/{ProjectHash}/autosave/{Name}_{YYYYMMDD_HHMMSS}.clipflow`（详见 [`cache-and-storage-spec.md` 第 2 节](file:///d:/Work/Dev/ClipFlow/docs/cache-and-storage-spec.md#L41)），最大保留 10 份历史快照。
+- **定时全量快照**：每隔 3 分钟后台静默序列化一份全量工程至第一轨本地缓存目录 `.clipflow_cache/{ProjectHash}/autosave/{Name}_{YYYYMMDD_HHMMSS}.clipflow`（详见 [`cache-and-storage-spec.md` 第 2 节](cache-and-storage-spec.md#2-第一轨工程本地缓存规约-clipflow_cache)），最大保留 10 份历史快照。
 - **异常恢复检测**：启动时如检测到异常退出遗留的 WAL 日志，弹出对话框提示用户“检测到未保存的工程修改，是否一键恢复”。
 
 ---

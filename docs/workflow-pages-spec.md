@@ -18,9 +18,9 @@ ClipFlow 的底部 Dock 栏（48px 高度）承载 6 大工作流页面：
 ```
 
 - **已规划页面**：
-  - `[ Agent ]`：详见 [`docs/agent-director-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/agent-director-spec.md)
-  - `[ 剪辑 ]`：完全对齐 PR 四区分屏，详见 [`docs/edit-layout-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/edit-layout-spec.md)
-  - `[ 动画 ]`：HyperFrames 代码动效工作台，详见 [`docs/hyperframes-spec.md`](file:///d:/Work/Dev/ClipFlow/docs/hyperframes-spec.md)
+  - `[ Agent ]`：详见 [`agent-director-spec.md`](agent-director-spec.md)
+  - `[ 剪辑 ]`：完全对齐 PR 四区分屏，详见 [`edit-layout-spec.md`](edit-layout-spec.md)
+  - `[ 动画 ]`：HyperFrames 代码动效工作台，详见 [`hyperframes-spec.md`](hyperframes-spec.md)
 - **本规范定义页面**：
   - `[ 声音 ]`（音频精修、混音台、EQ 与 AI 降噪）
   - `[ 图片 ]`（视觉资产池、封面制作与 B-Roll 管理）
@@ -68,8 +68,8 @@ ClipFlow 的底部 Dock 栏（48px 高度）承载 6 大工作流页面：
 3. **时间线音频展开联动**：
    - 切换到【声音】页面时，V 轨自动收缩为 32px 紧凑条，A 轨自动垂直展开至 120px，方便用户精确点选手柄调节淡入淡出（Crossfade）与避让曲线。
 4. **数据绑定与持久化契约 (Data Binding SSOT)**：
-   - 通道条上的推子音量（Fader）、声相（Pan）、4段参量均衡器（Parametric EQ 曲线）与 AI 降噪旋钮，直接与底层 [`Track`](file:///d:/Work/Dev/ClipFlow/docs/timeline-data-model.md#L399) 的 `audio_props: Option<TrackAudioProperties>` 建立双向响应式绑定；
-   - Master 总线推子与标称响度直接绑定至 [`Sequence`](file:///d:/Work/Dev/ClipFlow/docs/timeline-data-model.md#L411) 的 `master_bus: MasterBusProperties`，随工程文件完整保存与加载，杜绝参数丢失。
+   - 通道条上的推子音量（Fader）、声相（Pan）、4段参量均衡器（Parametric EQ 曲线）与 AI 降噪旋钮，直接与底层 [`Track`](timeline-data-model.md#24-轨道-track通道条与序列总线容器) 的 `audio_props: Option<TrackAudioProperties>` 建立双向响应式绑定；
+   - Master 总线推子与标称响度直接绑定至 [`Sequence`](timeline-data-model.md#24-轨道-track通道条与序列总线容器) 的 `master_bus: MasterBusProperties`，随工程文件完整保存与加载，杜绝参数丢失。
 
 ---
 
@@ -103,6 +103,7 @@ ClipFlow 的底部 Dock 栏（48px 高度）承载 6 大工作流页面：
 - **一键截帧定格为封面底图**：在监视器下方点击“定格为封面”，瞬间将当前播放头所在时刻的视频帧提取为 PNG 并置入画布底图。
 - **多平台安全框避让遮罩**：支持一键开启抖音右侧点赞/分享图标避让框、B站弹幕安全区，确保封面核心标题文案不被手机端 UI 遮挡。
 - **拖拽至时间轴生成 B-Roll**：左侧图片素材可直接拖拽至公用时间线的 V2 轨，自动生成带有默认“轻微缓慢放大（Ken Burns 运镜特效）”的静止镜头。
+- **智能 AI 扩图/生图 (远期扩展)**：Mockup 中的该区域为 M5+ 远期云端生成式扩展能力插槽；当前 M0~M4 阶段聚焦于纯本地口播剪辑、ASR 转写与本地动效渲染，UI 视窗中该按钮保持置灰禁用状态，无需引入任何云端文生图模型依赖。
 
 ---
 
@@ -140,13 +141,16 @@ ClipFlow 的底部 Dock 栏（48px 高度）承载 6 大工作流页面：
 
 ### 4.2 导出规格与性能指标
 
-| 预设名称 | 目标分辨率 | 帧率 | 推荐编码器 | 码率控制 | 音频规格 |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Bilibili 4K 超清** | 3840x2160 (16:9) | 60 fps | `hevc_nvenc` (硬件) | VBR 目标 20 Mbps, 最大 28 Mbps | AAC, 48kHz, 320 kbps |
-| **抖音 / 小红书 (9:16)** | 1080x1920 (9:16) | 60 fps | `h264_nvenc` (硬件) | VBR 目标 12 Mbps, 最大 16 Mbps | AAC, 48kHz, 256 kbps |
-| **YouTube 4K UHD** | 3840x2160 (16:9) | 60 fps | `hevc_nvenc` / AV1 | VBR 目标 35 Mbps, 最大 50 Mbps | AAC, 48kHz, 320 kbps |
-| **通用 1080P 快速分发** | 1920x1080 (16:9) | 30 fps | `h264_nvenc` | VBR 目标 8 Mbps | AAC, 48kHz, 192 kbps |
-| **ProRes 422 广播母带**| 原生工程分辨率 | 原生 | `prores_ks` (CPU) | Profile 3 (HQ) | 无损 PCM 24-bit 48kHz |
+| 预设名称 | 目标分辨率 | 帧率 | 推荐首选编码器 (NVIDIA) | 降级编码器链 (AMD / Intel / CPU 软解) | 码率控制 | 音频规格 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Bilibili 4K 超清** | 3840x2160 (16:9) | 60 fps | `hevc_nvenc` | `hevc_amf` $\to$ `hevc_qsv` $\to$ `libx265` | VBR 目标 20 Mbps, 最大 28 Mbps | AAC, 48kHz, 320 kbps |
+| **抖音 / 小红书 (9:16)** | 1080x1920 (9:16) | 60 fps | `h264_nvenc` | `h264_amf` $\to$ `h264_qsv` $\to$ `libx264` | VBR 目标 12 Mbps, 最大 16 Mbps | AAC, 48kHz, 256 kbps |
+| **YouTube 4K UHD** | 3840x2160 (16:9) | 60 fps | `hevc_nvenc` / AV1 | `hevc_amf` $\to$ `hevc_qsv` $\to$ `libx265` | VBR 目标 35 Mbps, 最大 50 Mbps | AAC, 48kHz, 320 kbps |
+| **通用 1080P 快速分发** | 1920x1080 (16:9) | 30 fps | `h264_nvenc` | `h264_amf` $\to$ `h264_qsv` $\to$ `libx264` | VBR 目标 8 Mbps | AAC, 48kHz, 192 kbps |
+| **ProRes 422 广播母带**| 原生工程分辨率 | 原生 | `prores_ks` (CPU) | 无需降级 (跨平台 CPU 纯算) | Profile 3 (HQ) | 无损 PCM 24-bit 48kHz |
+
+> **硬件编码自适应降级准则**：  
+> 导出启动前，系统底层通过 `clipflow-media` 执行轻量硬件探针探测可用的编码器。若未探测到 NVIDIA NVENC 硬件支持，自动按 `NVENC` $\to$ `AMD AMF` $\to$ `Intel QSV` $\to$ `CPU 纯软编 (libx264/libx265)` 链条平滑降级，界面给出轻量编码器状态提示，确保全硬件平台均可 100% 成功导出。
 
 ### 4.3 渲染队列与后台离屏导出 (Render Queue)
 - **非阻塞导出**：导出任务启动后，在独立离屏后台线程运行，用户可继续返回【剪辑】或【Agent】页面浏览工程，主界面不卡死。

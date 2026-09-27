@@ -172,12 +172,49 @@
 
 ## 3. Rust 与 HyperFrames 动效渲染协同规范 (Dual-Mode Motion Protocol)
 
-系统确立**“在线动态流式合成为主、按需离线烘焙为辅”**的双模调度架构（详见 [hyperframes-spec.md 第 1 节与第 3 节](file:///d:/Work/Dev/ClipFlow/docs/hyperframes-spec.md)）：
+系统确立**“在线动态流式合成为主、按需离线烘焙为辅”**的双模调度架构（详见 [hyperframes-spec.md 第 1 节与第 3 节](hyperframes-spec.md)）：
+
+> **机制与通道消歧说明 (Mechanism vs Channel)**：  
+> 本节定义的 `StreamingSharedMemory`（流式共享内存合成）与 `OfflineBakeFile`（离线文件烘焙）指**底层像素数据与 IPC 信道的物理交付机制**；而 [`hyperframes-spec.md` 第 4 节](hyperframes-spec.md#4-双通道架构快速低延迟预览-vs-离屏母带输出) 中定义的 `LivePreviewChannel` 与 `OfflineExportChannel` 指**上层交互视窗入口**。两者相互解耦，开发与评审时请优先使用全名，避免使用“模式 A/B”与“通道 A/B”简称混淆。
 
 ### 3.1 模式 A（默认）：在线动态流式合成 (`StreamingSharedMemory`)
 * **适用场景**：日常时间轴交互编辑、实时走带预览、以及 ClipFlow 内部母带直接导出。
 * **数据信道**：通过命名管道派发渲染帧指令后，Node 双 Worker（`PingPongPoolManager`）将逐帧求值生成的 Raw RGBA 像素直接写入 Win32 命名共享内存（`CreateFileMappingW` 三槽位环形池），由 Rust 端 `SharedMemConsumer` 在 **$\le 1.5\text{ms}$** 内完成映射并直传 GPU `wgpu 30.0` 纹理。
 * **时间轴形态**：时间轴挂载原生 `TrackKind::HyperFrames` 动效轨，片段直接保存 JSON 模板参数，**零磁盘 IO、无须预生成任何视频文件**，支持创作者随时双击修改字幕文本并毫秒级无感热重载。
+* **IPC 逐帧交互协议**：
+```json
+// 请求：Rust 宿主下发逐帧求值指令
+{
+  "jsonrpc": "2.0",
+  "id": "render-5001",
+  "method": "motion.render_frame",
+  "params": {
+    "layer_id": "018d96b3-7640-7cf1-9e23-8cfb12345678",
+    "template_id": "lower_third_minimal",
+    "frame_index": 45,
+    "slot_id": 1,
+    "width": 1920,
+    "height": 1080,
+    "props": {
+      "title": "ClipFlow 导演级剪辑 Agent",
+      "subtitle": "自动化口播剪辑与动效渲染"
+    }
+  }
+}
+
+// 响应：Node Worker 写入共享内存槽位完成通知
+{
+  "jsonrpc": "2.0",
+  "id": "render-5001",
+  "result": {
+    "status": "ready",
+    "frame_index": 45,
+    "slot_id": 1,
+    "bytes_written": 8294400,
+    "render_duration_ms": 1.2
+  }
+}
+```
 
 ### 3.2 模式 B（按需）：离线无损视频烘焙 (`OfflineBakeFile`)
 * **适用场景**：

@@ -279,7 +279,7 @@ flowchart TD
 ## 3. 与 ClipFlow 整体系统架构与设计体系的融合
 
 1. **统一收敛为 Neutral Modern 几何圆角梯队 (12px / 8px / 4px)**：
-   - 遵照 [ui-spec.md](file:///d:/Work/Dev/ClipFlow/docs/ui-spec.md) 确立的 Neutral Modern 深色设计体系，全系统六大核心视窗面板外框采用 **12px 圆角**，按钮与输入控件采用 **8px 圆角**，时间轴切片与微缩标签采用 **4px 圆角**，兼具工业紧凑度与现代化优雅质感。
+   - 遵照 [ui-spec.md](ui-spec.md) 确立的 Neutral Modern 深色设计体系，全系统六大核心视窗面板外框采用 **12px 圆角**，按钮与输入控件采用 **8px 圆角**，时间轴切片与微缩标签采用 **4px 圆角**，兼具工业紧凑度与现代化优雅质感。
 2. **Neutral Modern 标志性钴蓝 (#2F6FEB) 作为核心交互信号源**：
    - 将原图中的高亮蓝色源修补块（V1, A1）、时间轴反向五边形播放指针、激活选中外框全面规范为 **Cobalt Blue (#2F6FEB)**；按钮悬停 (Hover) 采用暗色提亮混色 (color-mix(in oklab, #2F6FEB, white 10%))，与整套设计体系严格对齐。
 3. **全局公用时间线无缝接合**：
@@ -315,11 +315,11 @@ flowchart TD
 - **收益**：遍历复杂度由 $O(M \times N)$ 降至 $O(\log M + \log N + K)$（$K$ 为屏幕内可见总切片数，通常 $\le 80$），单帧二维粗筛耗时锁定在 $\le 0.04\text{ms}$。
 
 ### 4.2 音频波形 LOD 金字塔与网格保留 (Waveform LOD & Mesh Retaining)
-- **多级细节（LOD）选择**：根据当前时间轴缩放比例（`pixels_per_second`），自适应从 `.peak` 文件读取对应精度（详见 [`docs/media-pipeline-spec.md` 第 4.4 节](file:///d:/Work/Dev/ClipFlow/docs/media-pipeline-spec.md)），严禁高缩放全景视角下绘制微秒级密度的波形。
+- **多级细节（LOD）选择**：根据当前时间轴缩放比例（`pixels_per_second`），自适应从 `.peak` 文件读取对应精度（详见 [`media-pipeline-spec.md` 第 4.4 节](media-pipeline-spec.md)），严禁高缩放全景视角下绘制微秒级密度的波形。
 - **Mesh 顶点复用**：音频波形绘制统一生成为单个 `egui::Mesh`（三角形条带）；在视口未发生平移和缩放、仅播放指针前进时，波形 `Shape::Mesh` 保持完全复用，禁止每一帧重新进行三角形顶点计算。
 
 ### 4.3 脏区与按需重绘驱动 (Selective Repaint)
-- **静止状态零开销**：视频暂停且无鼠标悬停、无拖拽时，界面主循环禁止盲目调用 `ctx.request_repaint()`，系统挂起于 Windows OS 消息队列，渲染帧率降为 0 FPS，CPU 占用降为 0.0%（详见 [`docs/architecture.md` 第 4.3 节](file:///d:/Work/Dev/ClipFlow/docs/architecture.md) `RepaintScheduler` 规范）。
+- **静止状态零开销**：视频暂停且无鼠标悬停、无拖拽时，界面主循环禁止盲目调用 `ctx.request_repaint()`，系统挂起于 Windows OS 消息队列，渲染帧率降为 0 FPS，CPU 占用降为 0.0%（详见 [`architecture.md` 第 4.3 节](architecture.md) `RepaintScheduler` 规范）。
 - **播放状态局部化**：播放期间仅以 60 FPS 节拍器触发播放指针（Playhead）与监视器贴图的重绘，轨道底板与未改变的片段静态外框不参与重新栅格化。
 
 ### 4.4 C1 字幕轨文本排版 Galley 缓存与字形管线 (Subtitle Galley Cache)
