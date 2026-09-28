@@ -1,7 +1,7 @@
 # 工程研发路线图与原子任务看板 (Development Roadmap & Task Board)
 
-> **版本**：v1.0.0  
-> **更新时间**：2026-09-26  
+> **版本**：v1.1.0  
+> **更新时间**：2026-09-28  
 > **适用技术栈**：Rust 1.98, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
 > **状态索引**：`[ ]` 待开始 | `[/]` 进行中 | `[x]` 已完成并通过验收 | `[-]` 已废弃/跳过  
 > **当前活动里程碑**：**Milestone 0 (M0)**  
@@ -25,7 +25,7 @@ flowchart TD
     M0["Milestone 0: 工程骨架与基础通信链路 (8 Tasks)\nWorkspace / Common / UI 窗口 / JobGuard / 命名管道"]
     M1["Milestone 1: 多媒体硬解播放与 PR 剪辑台 (11 Tasks)\nTimeline 模型 / 事务栈 / D3D11VA DMA / WASAPI 时钟 / PR 四区分屏"]
     M2["Milestone 2: 本地 ASR 转写、口播粗剪与工业切点外发 (12 Tasks)\nWhisper INT8 / 增量分片推送 / AgentTimelineAcl / FCP7 XML & EDL"]
-    M3["Milestone 3: HyperFrames 动效包装与硬件加速母带导出 (10 Tasks)\nChromium 显存硬限 / 命名共享内存 / 双 Worker 乒乓池 / NVENC 导出"]
+    M3["Milestone 3: HyperFrames 动效包装与硬件加速母带导出 (11 Tasks)\nChromium 显存硬限 / 命名共享内存 / 双 Worker 乒乓池 / NVENC 导出"]
     M4["Milestone 4: 导演级 Agent 编排闭环与发布分发 (7 Tasks)\nDirectorPlan / Tool Calling / 可逆 Diff / 双轨缓存管理 / 便携打包"]
 
     M0 --> M1 --> M2 --> M3 --> M4
@@ -64,7 +64,7 @@ flowchart TD
   - **前置依赖**：M0-T02
   - **涉改模块**：`crates/clipflow-app/`, `crates/clipflow-ui/`
   - **对应规范**：[ui-spec.md](ui-spec.md)
-  - **核心交付物**：搭建 `eframe`/`egui 0.36` + `wgpu 30.0` 应用程序主入口，严格应用 OpenDesign Neutral Modern 深色模式设计体系（深岩灰底板 `#0F1115`、分层中性表面 `#171A21`、`#2F6FEB` 钴蓝交互信号、12px/8px/4px 几何圆角梯队）与 egui 样式映射表。
+  - **核心交付物**：搭建 `eframe`/`egui 0.36` + `wgpu 30.0` 应用程序主入口，严格应用 OpenDesign Neutral Modern 深色模式设计体系（深岩灰底板 `#0F1115`、分层中性表面 `#171A21`、`#2F6FEB` 钴蓝交互信号、12px/8px/4px 几何圆角梯队）与 egui 样式映射表。封装 `ClipFlowTheme` 结构体（包含完整设计令牌常量集），在 `App::update()` 首行调用 `ClipFlowTheme::apply_to(ctx)` 完成全局样式注入。初始化 `AppState` 全局状态根结构体，托管 `Playhead`、`IsPlaying`、`ZoomLevel`、`VisibleTimeRange`、`SelectedClips` 等跨页面漫游状态。预埋 `RepaintScheduler` 三态门控基础结构（Dormant / Playing / Interacting），暂停且无交互超 150ms 时挂起 OS 消息队列，确保空闲待机零 CPU 占用。
   - **验收命令 (DoD)**：
     ```bash
     cargo run -p clipflow-app # 窗口秒级弹出，无渲染报错，主题色彩对齐规范
@@ -94,7 +94,7 @@ flowchart TD
   - **前置依赖**：M0-T05
   - **涉改模块**：`crates/clipflow-ipc/`, `python/clipflow_worker/`
   - **对应规范**：[ipc-protocol.md 第 2 节](ipc-protocol.md)
-  - **核心交付物**：实现 Windows 命名管道服务驱动（`\\.\pipe\clipflow-py-{pid}`），支持基于换行符分隔的 JSON-RPC 2.0 请求响应，实现 `ping` / `pong` 握手。
+  - **核心交付物**：实现 Windows 命名管道服务驱动（`\\.\pipe\clipflow-py-{pid}`），支持基于换行符分隔的 JSON-RPC 2.0 请求响应，实现 `ping` / `pong` 握手。管道创建强制绑定显式 SDDL DACL（`D:(A;;GA;;;OW)(A;;GA;;;SY)`）、设置 `PIPE_REJECT_REMOTE_CLIENTS` 与 `nMaxInstances=1`；握手阶段执行 `GetNamedPipeClientProcessId` PID 校验，校验通过前拒绝一切业务指令。
   - **验收命令 (DoD)**：
     ```bash
     cargo test -p clipflow-ipc --test named_pipe_rtt_test # 往返 RTT <= 0.35ms
@@ -142,7 +142,7 @@ flowchart TD
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test undo_redo_wal_tests`
 
 - [ ] **M1-T03 FFmpeg 9.0.2 D3D11VA 硬件解码与锁页帧池 (`clipflow-media`)**
-  - **前置依赖**：M0-T01
+  - **前置依赖**：M0-T01, M0-T02
   - **涉改模块**：`crates/clipflow-media/`
   - **对应规范**：[media-pipeline-spec.md 第 2 节](media-pipeline-spec.md)
   - **核心交付物**：绑定 `ffmpeg-sys-next`，配置 D3D11VA 硬件加速提取 NV12 数据，实现 `PinnedFramePool`（`VirtualAlloc` + `VirtualLock` 钉住物理内存），支持零拷贝 DMA 直传。
@@ -156,7 +156,7 @@ flowchart TD
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test color_matrix_accuracy`
 
 - [ ] **M1-T05 WASAPI 原生硬件单调主时钟与迟滞比较器 (`clipflow-media`)**
-  - **前置依赖**：M0-T02
+  - **前置依赖**：M0-T01, M0-T02
   - **涉改模块**：`crates/clipflow-media/`
   - **对应规范**：[media-pipeline-spec.md 第 3 节](media-pipeline-spec.md)
   - **核心交付物**：实现 `cpal` WASAPI 输出流，挂接 `IAudioClock` 硬件采样游标，封装 `MonotonicClampedClock`（无锁 CAS，时间回退严格为 0，单次查询 $\le 15\text{ns}$），引入施密特双阈值迟滞比较器消除 10ms 拍频顿挫。
@@ -201,7 +201,7 @@ flowchart TD
   - **前置依赖**：M1-T01 ~ M1-T10
   - **涉改模块**：`tests/m1_av_sync_bench.rs`
   - **对应规范**：[qa-and-benchmarks.md 第 2 节](qa-and-benchmarks.md)
-  - **核心交付物**：输入 SMPTE 闪烁校准视频连续播放 60 分钟，自动化断言音画累积漂移 $\le 2.0\text{ms}$，界面渲染稳定 60 FPS，空闲待机 CPU 占用 0.0%。
+  - **核心交付物**：输入 SMPTE 闪烁校准视频连续播放 60 分钟，自动化断言音画累积漂移 $\le 2.0\text{ms}$，界面渲染稳定 60 FPS，空闲待机 CPU 占用 $\le 0.5\%$（连续 10 秒采样均值）。
   - **验收命令 (DoD)**：`cargo test --test m1_av_sync_bench -- --nocapture`
 
 ---
@@ -215,7 +215,7 @@ flowchart TD
   - **前置依赖**：M0-T06
   - **涉改模块**：`python/clipflow_worker/asr/`
   - **对应规范**：[architecture.md 第 4.6 节](architecture.md) & [cache-and-storage-spec.md](cache-and-storage-spec.md)
-  - **核心交付物**：从 `%LOCALAPPDATA%\ClipFlow\models` 载入 `large-v2` INT8 权重；实现显存 OOM 捕获并在 $\le 3.5\text{s}$ 内平滑降级为 CPU 模式，提供 `MockAsrWorker` 供单元测试脱机运行。
+  - **核心交付物**：从 `%LOCALAPPDATA%\ClipFlow\models` 载入 `large-v2` INT8 权重；实现 `FallbackGovernor` 三级容灾自愈：L1 进程级 500ms 快速重试 → L2 CUDA OOM/驱动缺失在 $\le 3.5\text{s}$ 内降级 CPU → L3 连续失败熔断隔离并在 UI 呈现降级通知。提供 `MockAsrWorker` 供单元测试脱机运行。
   - **验收命令 (DoD)**：`uv run pytest python/clipflow_worker/tests/test_asr_fallback.py`
 
 - [ ] **M2-T02 IPC `asr.chunk_stream` 实时流式分片推送与进度租约**
@@ -233,7 +233,7 @@ flowchart TD
   - **验收命令 (DoD)**：`cargo test -p clipflow-ipc --test cancel_inference_test`
 
 - [ ] **M2-T04 `AgentTimelineAcl` 防腐网关与帧网格硬吸附 (`clipflow-timeline`)**
-  - **前置依赖**：M1-T01
+  - **前置依赖**：M0-T02, M1-T01
   - **涉改模块**：`crates/clipflow-timeline/`
   - **对应规范**：[timeline-data-model.md 第 1.4 节](timeline-data-model.md)
   - **核心交付物**：实现将外部 `f64` 浮点秒量化吸附至整数帧分界的数学算子，自动消除 $\le 1$ 帧微隙，杜绝黑屏坏帧。
@@ -271,14 +271,14 @@ flowchart TD
   - **前置依赖**：M1-T01
   - **涉改模块**：`crates/clipflow-timeline/`
   - **对应规范**：[timeline-data-model.md 第 5.3 节](timeline-data-model.md)
-  - **核心交付物**：基于 `quick-xml` 流式生成符合 FCP7 XML 规范的文件，路径强制采用 RFC 3986 `file://localhost/...` 百分号转义，1000 个切点生成耗时 $\le 15\text{ms}$。
+  - **核心交付物**：基于 `quick-xml` 流式生成符合 FCP7 XML 规范的文件，路径强制采用 RFC 3986 `file://localhost/...` 百分号转义，1000 个切点生成耗时 $\le 15\text{ms}$。`quick-xml` 解析端禁用 DTD 与外部实体（防 XXE 与 Billion Laughs），路径字段拦截 UNC（`\\...`）并强制 `dunce::canonicalize` 规范化。
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test fcp7_xml_export_test`
 
 - [ ] **M2-T10 规范化 CMX 3600 EDL 流式生成器 (`clipflow-timeline`)**
   - **前置依赖**：M1-T01
   - **涉改模块**：`crates/clipflow-timeline/`
   - **对应规范**：[timeline-data-model.md 第 5.3 节](timeline-data-model.md)
-  - **核心交付物**：实现 80 列定宽对齐的 EDL 生成器，通过注入 `* FROM CLIP NAME` 扩展注释行传递 UTF-8 中文路径，杜绝穿孔卡乱码。
+  - **核心交付物**：实现 80 列定宽对齐的 EDL 生成器，通过注入 `* FROM CLIP NAME` 扩展注释行传递 UTF-8 中文路径，杜绝穿孔卡乱码。路径字段拦截 UNC 远程路径并强制 `dunce::canonicalize` 规范化。
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test edl_export_test`
 
 - [ ] **M2-T11 `ConformInspector` 静态合规预检与降级诊断扫描器**
@@ -293,6 +293,7 @@ flowchart TD
   - **涉改模块**：`tests/m2_conformance_test.rs`
   - **对应规范**：[qa-and-benchmarks.md 第 1 节](qa-and-benchmarks.md)
   - **核心交付物**：利用 Python 自动化脚本调用 Premiere Pro 与 DaVinci Resolve CLI 导入生成的 XML，断言切点套底成功率 $\ge 99.9\%$，端到端 0 帧时间漂移。
+  - **测试环境**：需具备 Premiere Pro 与 DaVinci Resolve 的测试机；CI 中标记为手动验收，同时提供基于 `ffprobe` 结构化校验 + 参考文件 diff 的自动化降级验收路径。
   - **验收命令 (DoD)**：`cargo test --test m2_conformance_test`
 
 ---
@@ -300,13 +301,13 @@ flowchart TD
 ## 6. Milestone 3 (M3)：HyperFrames 动效包装与硬件加速母带导出
 
 - **核心目标**：接入 HyperFrames Web 动效逐帧确定性渲染引擎，通过 Win32 命名共享内存实现 4K 极速合成，交付母带级离线导出管线。
-- **总任务数**：10 个原子任务
+- **总任务数**：11 个原子任务
 
 - [ ] **M3-T01 Node.js 24 无头 Chromium 动效运行时搭建**
   - **前置依赖**：M0-T01
   - **涉改模块**：`node/hyperframes_renderer/`
   - **对应规范**：[hyperframes-spec.md 第 1 节](hyperframes-spec.md)
-  - **核心交付物**：启动 Headless Chromium 并注入虚拟时间驱动，实现 HTML/CSS/GSAP 模板在指定帧索引下的逐帧确定性求值与离屏截图。
+  - **核心交付物**：启动 Headless Chromium 并注入虚拟时间驱动，实现 HTML/CSS/GSAP 模板在指定帧索引下的逐帧确定性求值与离屏截图。启动参数强制白名单化（`--disable-remote-fonts`、禁用后台网络；严禁 `--no-sandbox` 与 `--disable-web-security`），强制注入严格 CSP（`connect-src 'none'`、`object-src 'none'` 等）。
   - **验收命令 (DoD)**：`node node/hyperframes_renderer/test_frame_render.js`
 
 - [ ] **M3-T02 Chromium 512MB 显存硬配额注入与 CDP 内存清洗管线**
@@ -320,7 +321,7 @@ flowchart TD
   - **前置依赖**：M1-T03, M3-T01
   - **涉改模块**：`crates/clipflow-media/`, `node/hyperframes_renderer/`
   - **对应规范**：[hyperframes-spec.md 第 3 节](hyperframes-spec.md)
-  - **核心交付物**：基于 Windows `CreateFileMappingW` 实现 3 槽位命名共享内存环形队列，Node 写入后 Rust `SharedMemoryConsumer` 映射直传 wgpu 纹理，单帧延迟 $\le 1.5\text{ms}$。
+  - **核心交付物**：基于 Windows `CreateFileMappingW` 实现 3 槽位命名共享内存环形队列，Node 写入后 Rust `SharedMemoryConsumer` 映射直传 wgpu 纹理，单帧延迟 $\le 1.5\text{ms}$。共享内存名称前缀锁定 `Local\clipflow-shm-{uuid}`，映射时校验尺寸严格等于 $\text{Width} \times \text{Height} \times 4$。
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test shared_memory_ipc_test`
 
 - [ ] **M3-T04 双 Worker 异步预热乒乓池 (`PingPongPoolManager`)**
@@ -355,7 +356,7 @@ flowchart TD
   - **前置依赖**：M1-T03, M3-T03
   - **涉改模块**：`crates/clipflow-media/`
   - **对应规范**：[media-pipeline-spec.md 第 5 节](media-pipeline-spec.md)
-  - **核心交付物**：构建离线时间戳单步时钟，按帧合成 V1~V3 画面与 C1 字幕，调用 FFmpeg 9.0.2 NVENC 硬件编码为 4K MP4 / ProRes 4444 独立母带。
+  - **核心交付物**：构建离线时间戳单步时钟，按帧合成 V1~V3 画面与 C1 字幕，调用 FFmpeg 9.0.2 硬件编码为 4K MP4 / ProRes 4444 独立母带。实现 `clipflow-media` 编码器硬件探针，按 NVENC → AMD AMF → Intel QSV → CPU `libx264` 顺序自适应降级，确保无 NVIDIA 显卡环境 100% 可导出。
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test master_export_test`
 
 - [ ] **M3-T09 声音页混音台通道条与 MasterBus 效果器数据绑定 (`clipflow-ui`)**
@@ -365,8 +366,15 @@ flowchart TD
   - **核心交付物**：在【声音】页面渲染 8 轨纵向混音通道条与 MasterBus，绑定 4 段 EQ、降噪及音量推子，实现对底层音频缓冲区的实时增益控制。
   - **验收命令 (DoD)**：`cargo test -p clipflow-ui --test audio_mixer_test`
 
-- [ ] **M3-T10 M3 动效确定性与万帧母带导出全连续性验收**
-  - **前置依赖**：M3-T01 ~ M3-T09
+- [ ] **M3-T10 导出工作台多平台预设与离屏渲染队列 (`clipflow-ui`)**
+  - **前置依赖**：M3-T08, M1-T07
+  - **涉改模块**：`crates/clipflow-ui/`
+  - **对应规范**：[workflow-pages-spec.md 导出页章节](workflow-pages-spec.md)
+  - **核心交付物**：在【导出】Dock 分页构建平台预设库（B站 4K / 抖音 9:16 / YouTube 4K / ProRes 422）、成片走带监视器、编码参数面板与非阻塞离屏渲染队列进度条；导出线程与 UI 线程彻底分离，动态降级预览纹理以确保 GPU 显存优先供给硬件编码。
+  - **验收命令 (DoD)**：`cargo test -p clipflow-ui --test export_page_test`
+
+- [ ] **M3-T11 M3 动效确定性与万帧母带导出全连续性验收**
+  - **前置依赖**：M3-T01 ~ M3-T10
   - **涉改模块**：`tests/m3_mastering_bench.rs`
   - **对应规范**：[qa-and-benchmarks.md 第 1 节](qa-and-benchmarks.md)
   - **核心交付物**：导出 10,000 帧长动效成片，SHA-256 逐帧比对任意 seek 与顺序渲染结果（差异严格为 0），FFmpeg `nullsink` 校验连续性 0 丢帧。
@@ -390,7 +398,7 @@ flowchart TD
   - **前置依赖**：M4-T01
   - **涉改模块**：`crates/clipflow-app/`
   - **对应规范**：[agent-director-spec.md 第 3 节](agent-director-spec.md)
-  - **核心交付物**：实现对长篇 Whisper 台词的分层大纲压缩（Hierarchical Chunking），组装导演级提示词并调用 LLM API 产出结构化剪辑案。
+  - **核心交付物**：实现对长篇 Whisper 台词的分层大纲压缩（Hierarchical Chunking），组装导演级提示词并调用 LLM API 产出结构化剪辑案。LLM API Key 通过 Windows DPAPI（`CryptProtectData`）加密存储至 `%LOCALAPPDATA%\ClipFlow\config\credentials.bin`，内存中明文密钥即时零化清除。
   - **验收命令 (DoD)**：`cargo test -p clipflow-app --test llm_director_prompt_test`
 
 - [ ] **M4-T03 Agent 导演对话工作台与可逆 Diff 审查看板 (`clipflow-ui`)**
@@ -451,3 +459,14 @@ sequenceDiagram
         Dev->>Board: 7. 进入下一个原子任务
     end
 ```
+
+---
+
+## 9. 远期特性占位 (M5+)
+
+> 以下功能已在对应规范文档中定义，但明确排除在 M0~M4 范围之外，作为后续里程碑的候选特性：
+>
+> - **【图片】工作台**：素材库、封面画布工作区、B-Roll 拖拽与 Ken Burns 运镜（基础功能）；智能 AI 扩图/生图（远期云端依赖，M4 前界面必须置灰禁用）。
+> - **OpenTimelineIO (OTIO)**：通用时间线交换格式 IR 层，替代或补充 FCP7 XML / EDL 的跨 NLE 互操作。
+> - **自动增量更新**：`updater.exe` 独立提权更新辅助器，差量增量包 `.pck`、原子重命名备份替换、3 秒健康检查回滚机制。
+> - **多平台扩展**：macOS / Linux 移植（当前架构强依赖 Win32 API：Job Object / Named Pipe / WASAPI / D3D11VA / DPAPI）。
