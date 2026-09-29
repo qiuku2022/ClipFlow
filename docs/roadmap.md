@@ -1,6 +1,6 @@
 # 工程研发路线图与原子任务看板 (Development Roadmap & Task Board)
 
-> **版本**：v1.1.0  
+> **版本**：v0.1.0  
 > **更新时间**：2026-09-28  
 > **适用技术栈**：Rust 1.98, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
 > **状态索引**：`[ ]` 待开始 | `[/]` 进行中 | `[x]` 已完成并通过验收 | `[-]` 已废弃/跳过  
@@ -122,7 +122,7 @@ flowchart TD
 
 ---
 
-## 4. Milestone 1 (M1)：媒体硬解播放与 PR 经典剪辑台
+## 4. Milestone 1 (M1)：媒体硬解播放与 PR 经典剪辑台 (Target Release: v0.1.0)
 
 - **核心目标**：打通 FFmpeg 9.0.2 D3D11VA 硬解到 wgpu 30.0 渲染链路，确立 WASAPI 硬件单调主时钟，交付完全对齐 Premiere Pro 四区分屏与多轨时间线剪辑台。
 - **总任务数**：11 个原子任务

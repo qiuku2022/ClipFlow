@@ -1,6 +1,6 @@
 # 安全威胁模型、沙箱隔离与隐私合规规范 (Security, Sandboxing & Privacy Specification)
 
-> **版本**：v1.0.0  
+> **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
 > **适用技术栈**：Rust 1.98 (MSVC), Windows Win32 API, Node.js 24 / Chromium, Python 3.13  
 > **核心地位**：规范全系统多进程安全边界、Web 动效执行沙箱、Windows 命名管道访问控制列表 (DACL)、工程文件防注入与用户媒体隐私保护机制。

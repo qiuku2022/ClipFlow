@@ -1,6 +1,6 @@
 # 导演级 Agent 协议与剪辑指令集规范 (Agent Director & Tool Calling Specification)
 
-> **版本**：v1.0.0  
+> **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
 > **适用技术栈**：Rust 1.98 (Host), Python 3.13 (`uv`), faster-whisper 1.2.1, OpenAI/Claude 兼容 API 协议  
 > **核心地位**：定义 ClipFlow 核心差异化特色——“导演级 Agent”的理解规划模型、Tool Calling 时间轴剪辑指令集、结构化方案 Payload 及 Agent 专属视窗交互规范。

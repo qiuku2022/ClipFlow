@@ -1,6 +1,6 @@
 # ClipFlow 文档索引 (Documentation SSOT)
 
-> **版本**：v1.0.0  
+> **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
 > **适用技术栈**：Rust 1.98, wgpu 30.0, egui 0.36, FFmpeg 9.0.2, Python 3.13 (`uv`), Node.js 24 LTS  
 > **核心地位**：ClipFlow 全局技术规格单一事实来源（SSOT）导航索引，收录 18 篇技术子规范与研发路线图。

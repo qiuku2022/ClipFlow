@@ -1,6 +1,6 @@
 # 打包分发与更新方案 (Packaging & Release)
 
-> **版本**：v1.0.0  
+> **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
 > **适用技术栈**：Rust 1.98, Python 3.13, Node.js 24 LTS, FFmpeg 9.0.2, NSIS, signtool  
 > **核心地位**：规范 Windows 端复合多运行时目录布局、分级安装包（Lite/Full）编排、NSIS 打包脚本、代码签名与静默热更新机制。
@@ -69,19 +69,19 @@ ClipFlow_Release/
 
 ```json
 {
-  "version": "1.1.0",
-  "min_compatible_version": "1.0.0",
+  "version": "0.1.0",
+  "min_compatible_version": "0.1.0",
   "release_date": "2026-10-15T00:00:00Z",
   "mandatory": false,
-  "changelog": "1. 提升 4K 时间轴多轨缩放流畅度\n2. 新增 3 款科技风动态角标模板",
+  "changelog": "1. 发布 v0.1.0，核心交付 PR 经典剪辑台与多轨时间线\n2. 支持基础媒体硬解与硬件加速渲染",
   "packages": {
     "full": {
-      "url": "https://cdn.clipflow.dev/releases/ClipFlow-Setup-1.1.0.exe",
+      "url": "https://cdn.clipflow.dev/releases/ClipFlow-Setup-0.1.0.exe",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "size_bytes": 245367800
     },
     "differential": {
-      "url": "https://cdn.clipflow.dev/releases/diff/diff-1.0.0-to-1.1.0.pck",
+      "url": "https://cdn.clipflow.dev/releases/diff/diff-0.1.0-alpha-to-0.1.0.pck",
       "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
       "size_bytes": 18452000
     }
