@@ -387,25 +387,33 @@ flowchart TD
 - **核心目标**：打通大语言模型意图理解到时间轴 Tool Calling 自动化编排，交付可逆 Diff 审查看板，完成 NSIS 与便携绿色版安装包打包分发。
 - **总任务数**：7 个原子任务
 
-- [ ] **M4-T01 `DirectorPlan` 结构化剪辑方案与指令集解析器 (`clipflow-timeline`)**
+- [ ] **M4-T01 `DirectorPlan` 指令集、只读工具与 Tool-Result 自愈回环 (`clipflow-timeline`)**
   - **前置依赖**：M1-T01, M2-T04
   - **涉改模块**：`crates/clipflow-timeline/`
-  - **对应规范**：[agent-director-spec.md 第 2 节](agent-director-spec.md)
-  - **核心交付物**：解析大模型生成的包含分段大纲、切点列表、BGM 选配及动效参数的 JSON Schema，校验合法性并生成 `TimelineCommand` 批处理任务。
-  - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test director_plan_parser_test`
+  - **对应规范**：[agent-director-spec.md 第 3 节](agent-director-spec.md)
+  - **核心交付物**：实现时间线只读感知工具（`timeline_query_project`, `timeline_query_range`, `timeline_query_cut_candidates`, `asset_search`）；解析大模型生成的包含分段大纲、切点列表、BGM 选配及动效参数的 JSON Schema；实现 `ToolExecutionResult` 结构化回环协议与片段失效（`ERR_CLIP_EXPIRED`）最多 2 次局部自愈重试逻辑。
+  - **验收命令 (DoD)**：
+    ```bash
+    cargo test -p clipflow-timeline --test director_plan_parser_test
+    cargo test -p clipflow-timeline --test tool_calling_and_healing_test
+    ```
 
-- [ ] **M4-T02 大模型意图规划、台词大纲分块与 Prompt 引擎集成**
+- [ ] **M4-T02 大模型意图规划、Prompt 引擎与 LlmGovernor 容灾调度**
   - **前置依赖**：M4-T01
   - **涉改模块**：`crates/clipflow-app/`
-  - **对应规范**：[agent-director-spec.md 第 3 节](agent-director-spec.md)
-  - **核心交付物**：实现对长篇 Whisper 台词的分层大纲压缩（Hierarchical Chunking），组装导演级提示词并调用 LLM API 产出结构化剪辑案。LLM API Key 通过 Windows DPAPI（`CryptProtectData`）加密存储至 `%LOCALAPPDATA%\ClipFlow\config\credentials.bin`，内存中明文密钥即时零化清除。
-  - **验收命令 (DoD)**：`cargo test -p clipflow-app --test llm_director_prompt_test`
+  - **对应规范**：[agent-director-spec.md 第 2 节](agent-director-spec.md) & [security-and-privacy.md 第 6 节](security-and-privacy.md)
+  - **核心交付物**：实现对长篇 Whisper 台词的分层大纲压缩（Hierarchical Chunking）与本地 Tokenizer 预算预检；构建带 `<untrusted_audio_transcript>` 定界标签与防间接注入过滤的导演提示词工程；实现 `LlmGovernor` 三级容灾状态机（重试 $\to$ 模型降级链 $\to$ 本地纯声学物理粗剪兜底）；LLM API Key 通过 Windows DPAPI（`CryptProtectData`）加密存储至 `%LOCALAPPDATA%\ClipFlow\config\credentials.bin`。
+  - **验收命令 (DoD)**：
+    ```bash
+    cargo test -p clipflow-app --test llm_director_prompt_test
+    cargo test -p clipflow-app --test llm_governor_fallback_test
+    ```
 
 - [ ] **M4-T03 Agent 导演对话工作台与可逆 Diff 审查看板 (`clipflow-ui`)**
   - **前置依赖**：M4-T02, M1-T08
   - **涉改模块**：`crates/clipflow-ui/`
-  - **对应规范**：[agent-director-spec.md 第 4 节](agent-director-spec.md)
-  - **核心交付物**：在【Agent】分页呈现人机自然语言对话流；方案生成后在时间线上呈现半透明“Ghost Clip”差分视图，用户点击“应用”一键合入时间轴。
+  - **对应规范**：[agent-director-spec.md 第 4-5 节](agent-director-spec.md)
+  - **核心交付物**：在【Agent】分页呈现人机自然语言对话流；方案生成后在时间线上呈现半透明“Ghost Clip”差分视图；严格执行人机回环安全契约，必须由用户显式点击“★ 一键采纳并应用到时间轴”后生成单一 `CompoundCommand` 落地，并支持 `Ctrl + Z` 完全撤销。
   - **验收命令 (DoD)**：`cargo test -p clipflow-ui --test agent_diff_board_test`
 
 - [ ] **M4-T04 Agent 自动编写 HyperFrames 代码并挂载轨道**
@@ -415,11 +423,11 @@ flowchart TD
   - **核心交付物**：Agent 根据当前台词语义自动生成角标、高潮卡点花字与数据图表 HTML/CSS 代码，自动通过 `TemplateValidator` 校验并挂载至 V2 轨道。
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test agent_motion_codegen_test`
 
-- [ ] **M4-T05 工程持久化容器 `.clipflow` 与双轨缓存清理看板**
+- [ ] **M4-T05 工程持久化容器 `.clipflow` 与 Agent 记忆会话保存**
   - **前置依赖**：M1-T02
   - **涉改模块**：`crates/clipflow-timeline/`, `crates/clipflow-ui/`
-  - **对应规范**：[cache-and-storage-spec.md](cache-and-storage-spec.md) & [timeline-data-model.md 第 4 节](timeline-data-model.md)
-  - **核心交付物**：实现工程元数据的 Zstandard 压缩序列化；在偏好设置提供当前工程缓存大小查看、一键清理代理/动效及孤儿缓存扫描清理功能。
+  - **对应规范**：[timeline-data-model.md 第 2.5 & 4 节](timeline-data-model.md) & [cache-and-storage-spec.md](cache-and-storage-spec.md)
+  - **核心交付物**：实现工程元数据的 Zstandard 压缩序列化，持久化存储 `AgentProjectSession`（含分幕大纲、活跃方案与用户拒绝切点的负样本记忆）；在偏好设置提供当前工程缓存大小查看、一键清理代理/动效及孤儿缓存扫描清理功能。
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test project_container_zstd_test`
 
 - [ ] **M4-T06 复合运行时编排与 Portable 便携版自动化构建**
@@ -429,12 +437,16 @@ flowchart TD
   - **核心交付物**：编写 PowerShell 构建脚本，编译 Rust Release 二进制，抽取独立的 Python 运行时（含 `faster-whisper`）与 Node 运行时，打包为纯相对寻址的绿色便携 Zip 包。
   - **验收命令 (DoD)**：`pwsh scripts/build_portable.ps1 # 生成 ClipFlow-v1.0.0-Portable.zip`
 
-- [ ] **M4-T07 NSIS 单文件安装包与全量 40 项 SLA 终检验收**
+- [ ] **M4-T07 NSIS 单文件安装包与全量 SLA / Agent 黄金评测终检验收**
   - **前置依赖**：M4-T06
-  - **涉改模块**：`scripts/installer.nsi`, `tests/full_sla_acceptance.rs`
-  - **对应规范**：[packaging-release.md](packaging-release.md) & [qa-and-benchmarks.md](qa-and-benchmarks.md)
-  - **核心交付物**：构建带有静默 VC++ 运行库检测的 NSIS 安装包；在干净 Windows 10/11 测试机上一键安装，运行全量 40 项 SLA 自动化测试套件并全数通过。
-  - **验收命令 (DoD)**：`cargo test --test full_sla_acceptance -- --nocapture`
+  - **涉改模块**：`scripts/installer.nsi`, `tests/full_sla_acceptance.rs`, `tests/agent_golden_eval.rs`
+  - **对应规范**：[packaging-release.md](packaging-release.md) & [qa-and-benchmarks.md 第 6 节](qa-and-benchmarks.md)
+  - **核心交付物**：构建带有静默 VC++ 运行库检测的 NSIS 安装包；在测试机上一键安装，运行全量 40 项工程 SLA 测试，并运行 Agent 决策黄金评测集（断言 Precision $\ge 92\%$, Recall $\ge 88\%$, 0 幻觉, 0 核心句断裂）。
+  - **验收命令 (DoD)**：
+    ```bash
+    cargo test --test full_sla_acceptance -- --nocapture
+    cargo test --test agent_golden_eval -- --nocapture
+    ```
 
 ---
 

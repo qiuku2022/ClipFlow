@@ -51,6 +51,11 @@
 | **Agent 粗剪切片接缝空洞率** | 连续切片帧网格缝合后黑屏空洞数 | **严格 0 帧 (0.0%)** | 0 帧 | 连续切除区间拓扑连续性校验 |
 | **音频 8 轨通道条混音吞吐** | 8 轨并行 4 段 EQ + 压缩 + 降噪 + 推子 | **$\ge 192\text{ kHz}$** | $\ge 96\text{ kHz}$ | `cpal` 混音缓冲区满载基准压测 |
 | **UI 页面切换重排耗时** | 切换 6 大 Dock 栏满宽时间线重绘耗时 | **$\le 0.5\text{ ms}$** | $\le 2.0\text{ ms}$ | egui 即时模式切页帧耗时统计 |
+| **Agent 冗余切除准确率 (Precision)** | 黄金评测集建议切除区间的有效性 | **$\ge 92.0\%$** | $\ge 85.0\%$ | Golden Cut Eval 与人工 Ground Truth 比对 |
+| **Agent 废话切除召回率 (Recall)** | 黄金评测集中废弃气口/错句的检出率 | **$\ge 88.0\%$** | $\ge 80.0\%$ | Golden Cut Eval 标准用例全量比对 |
+| **Agent 工具参数幻觉率** | 生成越界时间戳或无效 ID 的次数 | **严格 0 次 (零容忍)** | 0 次 | 自动化工具调用参数合法性断言测试 |
+| **Agent 核心句断裂率** | 核心主谓宾语义被错误切断的比率 | **严格 0 次 (零容忍)** | 0 次 | 语义依存句法树连通性校验断言 |
+| **Agent 局部错误自愈率** | 片段过期等可恢复错误 2 次内自愈比例 | **$\ge 95.0\%$** | $\ge 90.0\%$ | 故障注入测试与 Tool-Result 回环演练 |
 
 ---
 
@@ -226,4 +231,56 @@ cargo test -p clipflow-timeline --test project_serialization_stress -- --nocaptu
 - **测试场景 4：HyperFrames 动效不可逆降级诊断与 ProRes 4444 替代建议验证**：
   - 在时间轴 FX 轨道添加 3 处 HyperFrames Web 动态角标，触发导出检查；
   - 合格断言：`ConformInspector` 100% 检出 `UnsupportedDropped` 严重度条目，并在 UI 诊断报告看板中给出“建议先渲染为 Apple ProRes 4444 独立透明图层后送入 PR 叠加”的操作建议。
+
+---
+
+## 6. Agent 导演决策质量基准与回归门禁 (Agent Quality & Evaluation Benchmarks)
+
+传统工程基准（ASR CER、吸附耗时、渲染丢帧）仅能度量物理管线性能，无法评估 Agent“剪辑方案好不好、有没有幻觉”。为此，ClipFlow 建立标准化的**黄金评测集 (Golden Cut Dataset)** 与**自动化决策质量回归门禁**。
+
+### 6.1 黄金评测集规约 (Golden Cut Dataset Specification)
+
+黄金评测集存储于 `tests/fixtures/agent_eval_corpus/`，涵盖 4 大典型口播视频场景，总计 120 分钟素材与词级对齐 Ground Truth：
+
+| 测试集标识 | 场景类型 | 时长 | 语言风格 | 核心考核重点 |
+| :--- | :--- | :--- | :--- | :--- |
+| `EVAL-TECH-01` | 科技数码快剪 | 15 min | 高语速、密集技术专有名词 | 专有名词保护、长气口压缩、快节奏卡点 |
+| `EVAL-FIN-02` | 财经知识长口播 | 45 min | 中速、严谨长难句、多论据分层 | 宏观分幕结构合理度、从句与核心句完整性 |
+| `EVAL-LIVE-03` | 带货互动口播 | 30 min | 倒装句、频繁语气词（“然后/对吧”） | 语气助词高召回剔除、兴奋点 Hook 保留 |
+| `EVAL-POD-04` | 访谈对谈片段 | 30 min | 双人轻微抢话、思考停顿与结巴重复 | 结巴口误剪除、非主讲背景音保护 |
+
+每段素材均预先通过资深剪辑师完成逐帧标注，形成确定性的参考剪辑答案（Ground Truth），包含：
+- `ground_truth_cuts.json`：必须剪除的停顿、废话与语气词区间；
+- `protected_key_takeaways.json`：绝对禁止破坏的核心论点与结论时间戳白名单。
+
+### 6.2 决策质量核心度量与红线门禁 (Pass/Fail Gates)
+
+在 CI 或本地开发运行 `cargo test -p clipflow-app --test agent_golden_eval` 时，评测引擎自动化断言以下 5 大硬性指标：
+
+1. **废话切除准确率 (Cut Precision)**：
+   $$\text{Precision} = \frac{|\text{建议切除区间} \cap \text{标注切除区间}|}{|\text{建议切除区间}|} \ge 92.0\%$$
+   *（红线：若低于 85.0%，视为过度误切，阻断合入）*
+2. **废话切除召回率 (Cut Recall)**：
+   $$\text{Recall} = \frac{|\text{建议切除区间} \cap \text{标注切除区间}|}{|\text{标注切除区间}|} \ge 88.0\%$$
+   *（红线：若低于 80.0%，视为剪除保守，粗剪效果不显著）*
+3. **核心语义完整性破坏率 (Semantic Disruption Rate)**：
+   $$\text{DisruptionRate} = \frac{|\text{建议切除区间} \cap \text{受保护核心句时间}|}{|\text{受保护核心句总数}|} \equiv 0.0\%$$
+   *（零容忍红线：任何将主谓宾核心句从中途截断、造成听感不通顺的情况，断言直接 Panic 失败）*
+4. **工具调用参数幻觉率 (Hallucination Rate)**：
+   校验模型生成的工具调用入参：
+   - 引用未分配的 `clip_id` 或 `asset_id`；
+   - 时间戳起点 > 终点，或超出素材物理总时长；
+   - 目标轨道索引不存在或为只读锁定轨；  
+   **合格标准：上述非法调用次数必须严格为 0**。
+5. **Tool-Result 局部自愈成功率 (Auto-Healing Success Rate)**：
+   通过故障注入测试（模拟在 Agent 规划期间，人工切碎某个 Clip 导致 ID 过期），回传 `ERR_CLIP_EXPIRED` 结构化错误：
+   $$\text{HealRate} = \frac{\text{2 次内成功修正参数并执行成功数}}{\text{总注入故障数}} \ge 95.0\%$$
+
+### 6.3 Prompt 与模型版本回归保护机制
+任何针对 Prompt 模板、分块切片算法或 LLM 接入层代码的 Pull Request，必须在提交前附带黄金评测集的回归对比报告：
+```powershell
+# 运行 Agent 决策质量全量黄金基准测试
+cargo test -p clipflow-app --test agent_golden_eval -- --nocapture
+```
+若发现综合评分低于上一版本基线，CI 自动阻止合并，确保提示词工程的迭代具备明确的量化回归守护。
 

@@ -131,6 +131,9 @@ impl SmpteTimecode {
 
 大模型 (LLM) 与外部 Agent 工具通过自然语言或 JSON 交互时，产出的时间戳天然为十进制浮点秒数（`f64`）。为杜绝浮点数侵入时间轴内部状态，系统设立显式防腐层：外部浮点秒数在穿透至 `TimelineCommand` 之前，必须由 `AgentTimelineAcl` 强制量化并吸附至最近的物理帧分界点，并消除切片微小缝隙引发的 1 帧黑屏空洞。
 
+> **只读与修改路径隔离原则**：  
+> `AgentTimelineAcl` 仅作为写操作与时间轴事务的单向防腐栅栏。Agent 执行只读状态查询（如 `timeline_query_range`）时，直接读取内存中各 Clip 的 `RationalTime` 并转换为人类与 LLM 习惯的 `f64` 浮点秒返回，**绝不经过 ACL 的二次整数截断量化**，避免无意义的微秒级精度漂移。
+
 ```rust
 /// Agent 外部通信使用的原始请求结构 (仅用于 IPC / JSON 序列化)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,6 +222,7 @@ classDiagram
         +AssetPool asset_pool
         +Vec~Sequence~ sequences
         +Uuid active_sequence_id
+        +Option~AgentProjectSession~ agent_session
     }
     class Sequence {
         +Uuid id
@@ -605,6 +609,61 @@ pub struct Sequence {
 > **设计决策与类图映射说明 (Design Rationale & Model Mapping)**：  
 > 1. **画幅分辨率与时间基**：概念模型类图中的 `resolution` 由 `CanvasSize` 明确承载（预置 1080P/4K 横竖屏常量）；类图中的概念帧率（`FrameRate`）在 Rust 中具体化为有理数基数 `timebase` 与 `fps_denominator`（如 60000 / 1001 对应 59.94 FPS），确保时间轴全局帧计算绝对无累积浮点漂移。  
 > 2. **轨道单列表物理存储**：类图中概念性区分了 `video_tracks`、`audio_tracks`、`subtitle_tracks` 与 `effect_tracks`，但在 Rust 物理实现中统一合并为单一有序列表 `tracks: Vec<Track>`，由 `Track.kind` 枚举区分。这种设计保持了图层上下层叠覆盖次序与渲染管线遍历的单一真实源（SSOT），上层业务可通过 `sequence.tracks.iter().filter(|t| t.kind == TrackKind::Video)` 投影过滤。
+
+### 2.5 工程根实体与 Agent 导演会话持久化 (`Project` & `AgentProjectSession`)
+
+为了解决“工程关闭再打开后，Agent 分幕大纲、被拒绝候选切点与决策偏好全盘丢失”的问题，工程根实体显式挂载可选的 `AgentProjectSession`：
+
+```rust
+use std::collections::HashSet;
+use uuid::Uuid;
+
+/// ClipFlow 工程根实体 (SSOT 根节点)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    pub id: Uuid,
+    pub name: String,
+    pub asset_pool: AssetPool,
+    pub sequences: Vec<Sequence>,
+    pub active_sequence_id: Uuid,
+    /// 导演级 Agent 会话与决策记忆持久化
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_session: Option<AgentProjectSession>,
+}
+
+/// Agent 导演工作台持久化会话与决策记忆模型
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentProjectSession {
+    pub session_id: Uuid,
+    pub last_updated_at: i64,
+    /// 当前活跃或待确认的完整剪辑方案（DirectorPlan，详见 agent-director-spec.md）
+    pub active_plan: Option<serde_json::Value>,
+    /// 缓存的宏观分幕大纲（避免工程重开后重复消耗 Token 重新分幕）
+    pub cached_outline: Vec<CachedChapterSummary>,
+    /// 用户决策偏好与负样本记忆（防二次分析反复推荐已被用户否决的切点）
+    pub user_preferences: AgentUserPreferences,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CachedChapterSummary {
+    pub chapter_index: u32,
+    pub headline: String,
+    pub time_range: (f64, f64),
+    pub key_takeaways: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentUserPreferences {
+    /// 偏好的粗剪节奏（FastPaced, Steady, Climax）
+    pub preferred_rhythm: String,
+    /// 用户曾明确取消勾选/拒绝切除的时间区间签名散列集合（避免重新分析时逆向推荐）
+    pub rejected_cut_hashes: HashSet<String>,
+    /// 自定义配乐避让深度与偏好音量
+    pub bgm_ducking_preference_db: Option<f32>,
+}
+```
+*注：该字段随 `Project` 一并序列化至 `.clipflow` 容器内部，经 Zstandard 压缩存储，体积增加小于 15KB，但在异机迁移和重新打开时能够实现 100% 完整的 Agent 会话与剪辑方案还原。*
+
 
 ---
 

@@ -138,7 +138,12 @@ flowchart TD
 - **服务接口抽象与依赖反转 (`AsrWorkerProvider`)**：业务时间轴引擎仅持有 `Arc<dyn AsrWorkerProvider>` 抽象接口，彻底解耦具体 Python 脚本环境。提供生产级 `LocalPythonAsrWorker` 与毫秒级纯内存测试桩 `MockAsrWorker`，满足严苛单元测试与动态算力演进；
 - **双信道隔离与防死锁拓扑**：信令走异步双工命名管道（`\\.\pipe\clipflow-py-{pid}`），往返耗时 RTT $\le 0.35\text{ms}$；子进程 `stderr` 由独立异步任务流式消费并注入 Rust `tracing` 集中落盘，彻底根除 MSVCRT 4KB 缓冲死锁；
 - **双轨看门狗与长任务进度租约 (`ProgressLeaseTracker`)**：0ms 物理 BrokenPipe 即时捕获句柄关闭；流式 ASR 推理按 2 秒分片动态续约（动态租约窗口 $W_i = d_{\text{chunk}} \times \text{RTF} \times 3.0 + 1.5\text{s}$），彻底消除长视频推理被静态心跳误杀隐患（误杀率严格 $0.0\%$）；
-- **三级容灾与 CUDA 自愈降级状态机 (`FallbackGovernor`)**：L1 瞬态抖动 500ms 指数退避重试（限 1 次） $\to$ L2 捕获显存 OOM 或驱动缺失自动降级为 CPU 模式拉起（耗时 $\le 3.5\text{s}$）并在 UI 提示 $\to$ L3 连续崩溃熔断隔离并弹出诊断看板，时间轴工程数据 100% 留存，保障纯手动剪辑不受任何影响。
+- **三级容灾与 CUDA 自愈降级状态机 (`FallbackGovernor`)**：L1 瞬态抖动 500ms 指数退避重试（限 1 次） $\to$ L2 捕获显存 OOM 或驱动缺失自动降级为 CPU 模式拉起（耗时 $\le 3.5\text{s}$）并在 UI 提示 $\to$ L3 连续崩溃熔断隔离并弹出诊断看板，时间轴工程数据 100% 留存，保障纯手动剪辑不受任何影响；
+- **大模型调用容灾与三级降级调度器 (`LlmGovernor`)**：
+  将非确定性的大模型 API 调用纳入严格状态机管控：
+  1. **Tier 1 瞬态网络重试**：捕获连接超时（默认 15s）、DNS 抖动或 HTTP 429/503，执行带随机抖动的指数退避重试（1s $\to$ 3s，上限 2 次）；
+  2. **Tier 2 模型降级链 (Model Fallback Chain)**：主模型不可用或配额耗尽时，无缝切换至用户配置的备选模型（如云端轻量模型或本地 Ollama / vLLM），并在前端 UI 顶栏明确显示“当前运行于降级模型”；
+  3. **Tier 3 纯声学规则兜底 (Local Acoustic Heuristic)**：网络彻底离线且无可用本地 LLM 时，一键降级为基于 Whisper 词级时间戳 + Python VAD 能量检测的纯物理气口切除方案，前端顶栏悬挂醒目提示“离线声学粗剪模式（无语义润色）”，确保在完全无云端大模型算力时核心粗剪依然 100% 可用。
 
 ### 4.7 外部非编工程交换与合规诊断架构 (`TimelineExporter`)
 - **接口契约抽象与多格式解耦**：定义 `TimelineExporter` Trait 统领外部工程交换，将时间轴核心状态机与下游具体 XML/文本解析格式彻底解耦；

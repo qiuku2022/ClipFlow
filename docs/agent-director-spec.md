@@ -27,50 +27,62 @@ flowchart TD
     subgraph Director_Cognition ["导演大模型认知层 (LLM / Agent Core)"]
         PromptEngine["导演提示词工程与上下文分段器"]
         PlanGenerator["剪辑方案规划生成器 (Director Plan)"]
-        ToolExecutor["时间轴工具调用解析器 (Tool Calling)"]
         
         ASR_Engine & SilenceDetect --> PromptEngine
         PromptEngine --> PlanGenerator
-        PlanGenerator --> ToolExecutor
     end
 
     subgraph User_Approval ["交互审查视窗 (Agent 工作台)"]
         PlanView["大纲与方案审查卡片 (分段/红标/动效)"]
         ChatModify["自然语言多轮微调 (Prompt 对话流)"]
-        ApproveBtn["一键采纳执行 (Approve & Dispatch)"]
+        ApproveBtn["★ 一键采纳执行 (Approve & Dispatch)"]
         PlanView <--> ChatModify
         ChatModify --> ApproveBtn
     end
 
-    subgraph Native_Timeline ["Rust 全局公用时间线 (SSOT)"]
+    subgraph Execution_Engine ["执行与防腐层 (Rust Host Engine)"]
+        ToolExecutor["时间轴工具调用解析器 (Tool Calling / ACL)"]
         TimelineCmds["原子化 TimelineCommand 事务集\n(CompoundCommand)"]
+        ToolExecutor --> TimelineCmds
+    end
+
+    subgraph Native_Timeline ["Rust 全局公用时间线 (SSOT)"]
         Tracks["V1-V3 画面 / A1-A3 声音 / C1 字幕 / FX 动效"]
+        GhostLayer["Ghost Layer 虚拟投影层 (半透明高亮)"]
     end
 
     PlanGenerator --> PlanView
+    PlanGenerator -.->|虚拟高亮差分投影| GhostLayer
+    Native_Timeline -.->|timeline_query_* 只读状态感知| PromptEngine
     ApproveBtn --> ToolExecutor
-    ToolExecutor --> TimelineCmds --> Tracks
+    TimelineCmds --> Tracks
+    ToolExecutor -.->|ToolResult 结构化报错回灌 (自愈重试)| PromptEngine
 ```
 
 ---
 
 ## 2. LLM 接入层与长素材上下文调度
 
-### 2.1 大模型配置与安全存储
+### 2.1 大模型配置、Token 预算与容灾存储
 
 ClipFlow 支持本地大模型与主流云端 API，统一在主进程安全配置中心管理：
 - **兼容协议**：标准 OpenAI Chat Completions 协议（兼容 DeepSeek-V3/R1、Claude 3.5 Sonnet、OpenAI GPT-4o 及本地 Ollama / vLLM）。
-- **字段规范**：
+- **字段规范与 Token 预算**：
   ```rust
   pub struct LlmProviderConfig {
       pub provider_id: String,     // 如 "deepseek", "openai", "local-ollama"
       pub base_url: String,        // 如 "https://api.deepseek.com/v1"
       pub api_key: Option<String>, // DPAPI 加密存储于 Windows 凭据管理器
       pub model_name: String,      // 如 "deepseek-chat", "gpt-4o"
-      pub max_tokens: u32,
+      pub max_prompt_tokens: u32,  // 输入 Token 上限预算（如 16,384），输入前由本地 Tokenizer 预检阻断超限
+      pub max_completion_tokens: u32, // 输出 Token 上限预算（如 4,096）
       pub temperature: f32,        // 剪辑规划建议 0.2 ~ 0.4（兼顾创造性与指令稳定性）
+      pub timeout_seconds: u32,    // 单次请求超时时间（默认 30s）
+      pub fallback_model_name: Option<String>, // 二级降级备用模型（如 "deepseek-chat" -> "local-ollama"）
   }
   ```
+- **Token 预算与超限防御契约**：在文本送入大模型前，主进程必须调用轻量本地分词器（基于 `tiktoken-rs`）预估 Prompt 长度。若超出 `max_prompt_tokens`，强制触发宏微两级分幕切片（Hierarchical Chunking），严禁静默发送导致 API 拒绝报错。
+
 
 ### 2.2 超长视频分幕分块策略 (Context Chunking)
 
@@ -98,14 +110,117 @@ ClipFlow 支持本地大模型与主流云端 API，统一在主进程安全配�
 
 ---
 
-## 3. 核心剪辑指令集 (Tool Calling Schema)
+## 3. 核心剪辑指令集与双向工具契约 (Tool Calling Schema & Protocols)
 
-Agent 操作公用时间线时，必须且仅能通过以下结构化工具调用。
+Agent 操作公用时间线时，必须且仅能通过以下结构化工具调用。系统建立**“先读后改、读写隔离、类型安全”**的双向工具契约：
+- **只读查询工具 (Read-Only Inspection Tools)**：支持多轮对话时“先看现状再定策略”，实现精准的现状感知；
+- **写操作与事务工具 (Mutation Tools)**：生成修改建议，经过用户确认后原子化落地为 `CompoundCommand`；
+- **执行结果回环 (Tool-Result Feedback Loop)**：执行层将执行成败与结构化错误码实时回传模型，形成闭环自愈。
 
-> **时间轴防腐层契约 (ACL Guardrail)**：  
-> 工具调用参数与外部通信协议中声明的所有时间参数（如 `start_time_seconds`, `duration_seconds`）统一使用人类与 LLM 习惯的十进制浮点秒（`f64`）。当指令被传递至 Rust 时间轴引擎时，**统一由 `AgentTimelineAcl`（详见 [`timeline-data-model.md` 第 1.4 节](timeline-data-model.md#14-agent-防腐层-acl-与吸附引擎-agenttimelineacl)）在进入事务命令栈前执行严格的帧网格硬吸附（`RationalTime`）与 $\le 1$ 帧微隙自动缝合**，保证切片空洞坏帧率严格为 0。
+### 3.1 时间线只读查询工具 (Read-Only Inspection Tools)
 
-### 3.1 工具清单定义 (JSON Schema)
+> **只读工具四项契约**：  
+> 1. **零事务副作用**：严禁触发 `TimelineCommand` 事务栈压栈，纯只读内存状态投影，不影响 Undo/Redo 历史；  
+> 2. **读路径免帧吸附**：入参与出参统一使用人类与 LLM 友好的十进制浮点秒（`f64`），不经过 `AgentTimelineAcl` 的强制整数帧截断，避免多次量化带来的精度损耗；  
+> 3. **防上下文膨胀 (Context Window Protection)**：单次查询严格限制返回记录条数（默认 50，硬上限 200），支持 `limit` / `offset` 分页，防止数万字时间戳撑爆 LLM 窗口；  
+> 4. **零媒体二进制**：仅回传结构化轻量元数据与台词摘要，绝对禁止回传音视频原始二进制流或波形采样数据。
+
+#### ① 查询全局工程与时间线概貌：`timeline_query_project`
+用于在会话开端或执行大范围改动前感知时间线全局结构（主序列总时长、帧率、各轨道状态与 Ghost Layer）。
+
+```json
+{
+  "name": "timeline_query_project",
+  "description": "查询当前工程的全局时间线元数据（总时长、主轨帧率、各轨道类型/锁定/静音状态、Ghost Layer 虚拟图层激活状态）",
+  "parameters": {
+    "type": "object",
+    "properties": {},
+    "required": []
+  }
+}
+```
+
+#### ② 查询指定区间时间轴片段：`timeline_query_range`
+用于查询局部时间段内各轨道具体有哪些素材片段（回答“这段素材现在在哪条轨上、多长、是否锁死”）。
+
+```json
+{
+  "name": "timeline_query_range",
+  "description": "查询指定时间范围内各个轨道的片段元数据摘要（返回 clip_id、素材引用、时间区间、是否锁定）",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "start_time_seconds": { "type": "number", "description": "查询起点（秒）" },
+      "end_time_seconds": { "type": "number", "description": "查询终点（秒）" },
+      "track_indices": {
+        "type": "array",
+        "items": { "type": "integer" },
+        "description": "限定查询的轨道索引列表，缺省时查询全部轨道"
+      },
+      "limit": { "type": "integer", "description": "返回最大片段数（默认 50，上限 200）", "default": 50 },
+      "offset": { "type": "integer", "description": "分页偏移量", "default": 0 }
+    },
+    "required": ["start_time_seconds", "end_time_seconds"]
+  }
+}
+```
+
+#### ③ 查询底层候选切点与气口：`timeline_query_cut_candidates`
+用于获取 Python ASR / VAD 已经标出的物理静音或语气词切点，以便 Agent 在此基础上做语义二次判定。
+
+```json
+{
+  "name": "timeline_query_cut_candidates",
+  "description": "查询当前素材由物理 VAD 或声学模型初步标定的停顿、气口与语气词候选切点列表",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "time_range": {
+        "type": "object",
+        "properties": {
+          "start_seconds": { "type": "number" },
+          "end_seconds": { "type": "number" }
+        }
+      },
+      "status_filter": {
+        "type": "string",
+        "enum": ["all", "pending", "accepted", "rejected"],
+        "description": "切点过滤状态（默认 all）"
+      },
+      "limit": { "type": "integer", "default": 100 }
+    }
+  }
+}
+```
+
+#### ④ 检索媒体资产库：`asset_search`
+用于检索可用 B-Roll 素材、配乐素材或 HyperFrames 动效模板，以便精准填写挂载参数。
+
+```json
+{
+  "name": "asset_search",
+  "description": "在工程素材库中按关键词、标签或类型检索可用素材资产（仅返回元数据摘要，不含二进制）",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string", "description": "检索关键词" },
+      "kind": {
+        "type": "string",
+        "enum": ["video", "audio", "image", "hyperframes_template"],
+        "description": "素材类型"
+      },
+      "limit": { "type": "integer", "default": 20 }
+    }
+  }
+}
+```
+
+---
+
+### 3.2 时间线写操作与事务工具 (Mutation Tools)
+
+> **时间轴防腐层写契约 (ACL Guardrail)**：  
+> 所有写工具参数中声明的时间参数统一使用人类习惯的 `f64`。当指令送入底层 Rust 事务执行前，**必须由 `AgentTimelineAcl` 执行严格的帧网格硬吸附（`RationalTime`）与 $\le 1$ 帧微隙自动缝合**，保证切片空洞坏帧率严格为 0。
 
 #### ① 批量切除冗余片段：`timeline_batch_cut_and_ripple`
 用于剔除口播气口、停顿、语气助词及废话，并执行波纹左移平齐。
@@ -205,6 +320,76 @@ Agent 操作公用时间线时，必须且仅能通过以下结构化工具调�
   }
 }
 ```
+
+---
+
+### 3.3 工具执行回环与自愈机制 (Tool-Result & Self-Healing Protocol)
+
+现行非编交互中，用户在与 Agent 交互期间可能在时间线上随时进行手动移动、加锁或剪切。若工具执行发生偏差，系统通过 **Tool-Result 回环协议** 将执行层状态精准回传大模型，避免单次执行失败导致整个剪辑方案作废：
+
+```mermaid
+sequenceDiagram
+    participant LLM as Agent 认知层
+    participant Host as Rust 宿主执行引擎
+    participant TL as 时间轴状态机 (SSOT)
+    participant UI as 创作者界面
+
+    LLM->>Host: 下发工具调用 (Tool Call)
+    Host->>TL: 预检与执行 (Pre-check & Execute)
+    alt 执行成功 (Success)
+        TL-->>Host: 产生 CompoundCommand 事务
+        Host-->>LLM: 回传 ToolResult (Success, 影响区间, 新生成 clip_id)
+        Host->>UI: 渲染时间线高亮/更新卡片
+    else 结构化报错 (Recoverable Error)
+        TL-->>Host: 拦截异常 (如 ERR_CLIP_EXPIRED)
+        Host-->>LLM: 回传 ToolResult (Error Payload, 最新有效上下文)
+        Note over LLM: 触发自愈重试 (最多 2 次)
+        LLM->>Host: 修正参数后重发 Tool Call
+    else 致命冲突 (Unrecoverable Error)
+        Host->>UI: 弹出单点冲突卡片 (锁定轨道/严重越界)，交由用户裁决
+    end
+```
+
+#### 结构化执行结果载荷：`ToolExecutionResult`
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolExecutionResult {
+    pub call_id: String,
+    pub success: bool,
+    pub error: Option<ToolErrorPayload>,
+    /// 执行成功时，受影响的时间区间（已吸附帧精度秒数）
+    pub affected_time_range: Option<(f64, f64)>,
+    /// 新生成的片段 ID 映射（用于多轮跟踪）
+    pub generated_clip_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolErrorPayload {
+    pub code: ToolErrorCode,
+    pub message: String,
+    /// 诊断信息与可恢复上下文（如目标切片当前实际所在的时间区间）
+    pub recovery_context: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ToolErrorCode {
+    /// 片段已不存在或已被前序命令分裂，附带当前区间真实 clip_id
+    ErrClipExpired,
+    /// 目标轨道被创作者手动加锁保护
+    ErrTrackLocked,
+    /// 声明的时间范围超出当前序列总有效时长
+    ErrTimeOutOfBounds,
+    /// 轨道元素重叠碰撞且未允许覆盖
+    ErrCollisionOverlap,
+    /// 波纹剪切会导致下游关键人工打点错位
+    ErrRippleDisruption,
+}
+```
+
+- **两轮自愈兜底机制 (2-Turn Auto-Healing)**：
+  1. 当遇到 `ErrClipExpired` 或 `ErrTimeOutOfBounds` 这类轻微偏差时，Rust 宿主将错误详情与当前真实的切片 ID 及最新区间以 `tool-result` 格式送回大模型上下文，模型自动自愈校正参数并发起二次调用；
+  2. 若连续 2 次重试仍未成功，中断自愈，前端工作台弹出醒目的琥珀色提示条，标明“该建议片段位置发生变动，请人工确认”，杜绝死循环消耗 API 配额。
+
 
 ---
 
