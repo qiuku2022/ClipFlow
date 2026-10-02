@@ -76,6 +76,7 @@ pub struct AppState {
     pub is_playing: bool,
     pub zoom_level: f32,
     pub visible_time_range: TimeRange,
+    pub active_page: crate::dock::WorkflowPage,
     pub scheduler: RepaintScheduler,
 }
 
@@ -89,6 +90,7 @@ impl Default for AppState {
                 RationalTime::ZERO,
                 RationalTime::new(60000, 1000), // 初始可见 60 秒
             ),
+            active_page: crate::dock::WorkflowPage::Agent,
             scheduler: RepaintScheduler::new(),
         }
     }

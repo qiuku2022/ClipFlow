@@ -1,7 +1,9 @@
 //! ClipFlow 桌面端应用程序主入口
 
+use clipflow_ui::dock::WorkflowDock;
 use clipflow_ui::state::{AppState, RepaintState};
 use clipflow_ui::theme::ClipFlowTheme;
+use clipflow_ui::timeline_placeholder::render_timeline_placeholder;
 use eframe::egui;
 
 struct ClipFlowApp {
@@ -39,35 +41,70 @@ impl eframe::App for ClipFlowApp {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
 
-        // 4. 主视口界面呈现
-        ui.heading(
-            egui::RichText::new("ClipFlow")
-                .color(ClipFlowTheme::TEXT_PRIMARY)
-                .strong(),
-        );
-        ui.label(
-            egui::RichText::new("AI 导演级剪辑工坊 (Milestone 0)")
-                .color(ClipFlowTheme::TEXT_SECONDARY),
-        );
+        // 4. 界面布局：上半屏（工作流页面卡片）、下半屏（时间线底座）、最底部（Dock 栏）
+        let total_rect = ui.available_rect_before_wrap();
+        let timeline_height = 200.0;
+        let upper_height = (total_rect.height() - timeline_height - WorkflowDock::HEIGHT - 16.0).max(150.0);
 
-        ui.add_space(16.0);
-
-        // 状态卡片
-        egui::Frame::new()
-            .fill(ClipFlowTheme::SURFACE)
-            .stroke(egui::Stroke::new(1.0, ClipFlowTheme::BORDER))
-            .corner_radius(ClipFlowTheme::RADIUS_PANEL)
-            .inner_margin(16.0)
-            .show(ui, |ui| {
-                ui.label(
-                    egui::RichText::new("系统状态监控")
-                        .color(ClipFlowTheme::TEXT_PRIMARY)
-                        .strong(),
-                );
+        // 上半屏：当前工作流页面视窗
+        ui.allocate_ui_with_layout(
+            egui::vec2(total_rect.width(), upper_height),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
                 ui.add_space(8.0);
-                ui.label(format!("播放头位置: {}", self.state.playhead));
-                ui.label(format!("门控调度状态: {:?}", gating));
-            });
+                ui.horizontal(|ui| {
+                    ui.heading(
+                        egui::RichText::new("ClipFlow")
+                            .color(ClipFlowTheme::TEXT_PRIMARY)
+                            .strong(),
+                    );
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "当前工作区: {} ({})",
+                            self.state.active_page.as_str(),
+                            self.state.active_page.label_zh()
+                        ))
+                        .color(ClipFlowTheme::COBALT_ACCENT),
+                    );
+                });
+
+                ui.add_space(8.0);
+
+                egui::Frame::new()
+                    .fill(ClipFlowTheme::SURFACE)
+                    .stroke(egui::Stroke::new(1.0, ClipFlowTheme::BORDER))
+                    .corner_radius(ClipFlowTheme::RADIUS_PANEL)
+                    .inner_margin(12.0)
+                    .show(ui, |ui| {
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "{} 视窗内容区 (M0 骨架演示)",
+                                self.state.active_page.label_zh()
+                            ))
+                            .color(ClipFlowTheme::TEXT_PRIMARY)
+                            .strong(),
+                        );
+                        ui.add_space(4.0);
+                        ui.label(
+                            egui::RichText::new(format!(
+                                "门控状态: {:?} | 播放头: {}",
+                                gating, self.state.playhead
+                            ))
+                            .color(ClipFlowTheme::TEXT_MUTED),
+                        );
+                    });
+            },
+        );
+
+        ui.add_space(8.0);
+
+        // 下半屏：全局公用时间线占位底座（常驻保活）
+        render_timeline_placeholder(ui, &self.state);
+
+        ui.add_space(4.0);
+
+        // 底部达芬奇 48px Dock 栏
+        WorkflowDock::show(ui, &mut self.state.active_page);
     }
 }
 
