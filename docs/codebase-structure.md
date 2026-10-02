@@ -1,7 +1,7 @@
 # 代码仓库架构与模块职责规范 (Codebase Structure & Crate Topology)
 
 > **版本**：v0.1.0  
-> **更新时间**：2026-09-26  
+> **更新时间**：2026-10-02  
 > **适用技术栈**：Rust 1.98 (Cargo Workspace), Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
 > **核心地位**：指导 ClipFlow 源码目录划分、各 crate 职责边界与单向无环依赖图谱（DAG）。
 
@@ -9,8 +9,8 @@
 
 ## 1. 仓库工程目录全景 (Polyglot Monorepo)
 
-> **实施状态与目标蓝图说明**：  
-> 本规范描述 ClipFlow **目标完成态**的模块划分与工程文件树全景。当前代码库处于 **M0 准备阶段**（仓库基础骨架尚未创建，实际已存在目录包括 `.agents/` 技能与规范库、`.local/` 审计报告与设计体系镜像、`docs/` 19 篇核心规范）。各 crate 与运行时模块将严格按照 `roadmap.md` 里程碑逐步落地。
+> **实施状态说明**：  
+> ClipFlow **Milestone 0 (M0)** 已正式交付完成。仓库基础骨架已建立，包含 6 大 Rust Crate 骨架（单向无环 DAG）、Python 3.13 (`uv`) 工作环境与 Node.js 24 基础配置。后续运行时子模块将严格按照 `roadmap.md` 里程碑逐步落地。
 
 ClipFlow 采用复合多运行时架构，根目录通过严格的隔离规约组织跨语言模块：
 

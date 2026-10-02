@@ -1,10 +1,10 @@
 # 工程研发路线图与原子任务看板 (Development Roadmap & Task Board)
 
 > **版本**：v0.1.0  
-> **更新时间**：2026-09-28  
+> **更新时间**：2026-10-02  
 > **适用技术栈**：Rust 1.98, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
 > **状态索引**：`[ ]` 待开始 | `[/]` 进行中 | `[x]` 已完成并通过验收 | `[-]` 已废弃/跳过  
-> **当前活动里程碑**：**Milestone 0 (M0)**  
+> **当前活动里程碑**：**Milestone 0 (M0)**（已交付并通过端到端验收，下一阶段：**Milestone 1 (M1)**）  
 > **核心地位**：指导 ClipFlow 全生命周期的任务分解、依赖时序、验收命令 (DoD) 与进度追踪的单一执行事实来源。
 
 ---
@@ -22,7 +22,7 @@
 
 ```mermaid
 flowchart TD
-    M0["Milestone 0: 工程骨架与基础通信链路 (8 Tasks)\nWorkspace / Common / UI 窗口 / JobGuard / 命名管道"]
+    M0["Milestone 0: 工程骨架与基础通信链路 (8 Tasks - 已交付)\nWorkspace / Common / UI 窗口 / JobGuard / 命名管道"]
     M1["Milestone 1: 多媒体硬解播放与 PR 剪辑台 (11 Tasks)\nTimeline 模型 / 事务栈 / D3D11VA DMA / WASAPI 时钟 / PR 四区分屏"]
     M2["Milestone 2: 本地 ASR 转写、口播粗剪与工业切点外发 (12 Tasks)\nWhisper INT8 / 增量分片推送 / AgentTimelineAcl / FCP7 XML & EDL"]
     M3["Milestone 3: HyperFrames 动效包装与硬件加速母带导出 (11 Tasks)\nChromium 显存硬限 / 命名共享内存 / 双 Worker 乒乓池 / NVENC 导出"]
@@ -36,9 +36,9 @@ flowchart TD
 ## 3. Milestone 0 (M0)：工程骨架与基础通信链路
 
 - **核心目标**：完成 Polyglot Monorepo 多语言多进程骨架搭建，实现 Rust 宿主窗口秒开与 Windows Job Object 内核级安全通信链路。
-- **总任务数**：8 个原子任务
+- **总任务数**：8 个原子任务（全部已交付完成）
 
-- [ ] **M0-T01 多语言仓库根工程初始化**
+- [x] **M0-T01 多语言仓库根工程初始化**
   - **前置依赖**：无
   - **涉改模块**：根目录 `Cargo.toml`, `.cargo/config.toml`, `pyproject.toml`, `package.json`, `.python-version`
   - **对应规范**：[environment-setup.md](environment-setup.md) & [codebase-structure.md](codebase-structure.md)
@@ -50,7 +50,7 @@ flowchart TD
     node --version          # 输出 v24.x.x
     ```
 
-- [ ] **M0-T02 基础类型与时间数学库实现 (`clipflow-common`)**
+- [x] **M0-T02 基础类型与时间数学库实现 (`clipflow-common`)**
   - **前置依赖**：M0-T01
   - **涉改模块**：`crates/clipflow-common/`
   - **对应规范**：[timeline-data-model.md 第 1 节](timeline-data-model.md)
@@ -60,7 +60,7 @@ flowchart TD
     cargo test -p clipflow-common
     ```
 
-- [ ] **M0-T03 主窗口宿主与 Neutral Modern 深色视觉主题 (`clipflow-app` & `clipflow-ui`)**
+- [x] **M0-T03 主窗口宿主与 Neutral Modern 深色视觉主题 (`clipflow-app` & `clipflow-ui`)**
   - **前置依赖**：M0-T02
   - **涉改模块**：`crates/clipflow-app/`, `crates/clipflow-ui/`
   - **对应规范**：[ui-spec.md](ui-spec.md)
@@ -70,7 +70,7 @@ flowchart TD
     cargo run -p clipflow-app # 窗口秒级弹出，无渲染报错，主题色彩对齐规范
     ```
 
-- [ ] **M0-T04 达芬奇式底部 Dock 栏交互与工作流路由**
+- [x] **M0-T04 达芬奇式底部 Dock 栏交互与工作流路由**
   - **前置依赖**：M0-T03
   - **涉改模块**：`crates/clipflow-ui/`
   - **对应规范**：[prd.md 第 2 节](prd.md) & [edit-layout-spec.md](edit-layout-spec.md)
@@ -80,7 +80,7 @@ flowchart TD
     cargo test -p clipflow-ui # 包含切页状态机单测，切页耗时 <= 0.5ms
     ```
 
-- [ ] **M0-T05 Windows Job Object 内核级生命周期强绑定 (`clipflow-ipc`)**
+- [x] **M0-T05 Windows Job Object 内核级生命周期强绑定 (`clipflow-ipc`)**
   - **前置依赖**：M0-T01
   - **涉改模块**：`crates/clipflow-ipc/`
   - **对应规范**：[ipc-protocol.md 第 1 节](ipc-protocol.md)
@@ -90,27 +90,27 @@ flowchart TD
     cargo test -p clipflow-ipc --test job_guard_kill_test # 宿主被强杀时子进程 100% 连带退出
     ```
 
-- [ ] **M0-T06 异步双工命名管道与 JSON-RPC 2.0 握手信道 (`clipflow-ipc`)**
+- [x] **M0-T06 异步双工命名管道与 JSON-RPC 2.0 握手信道 (`clipflow-ipc`)**
   - **前置依赖**：M0-T05
   - **涉改模块**：`crates/clipflow-ipc/`, `python/clipflow_worker/`
   - **对应规范**：[ipc-protocol.md 第 2 节](ipc-protocol.md)
   - **核心交付物**：实现 Windows 命名管道服务驱动（`\\.\pipe\clipflow-py-{pid}`），支持基于换行符分隔的 JSON-RPC 2.0 请求响应，实现 `ping` / `pong` 握手。管道创建强制绑定显式 SDDL DACL（`D:(A;;GA;;;OW)(A;;GA;;;SY)`）、设置 `PIPE_REJECT_REMOTE_CLIENTS` 与 `nMaxInstances=1`；握手阶段执行 `GetNamedPipeClientProcessId` PID 校验，校验通过前拒绝一切业务指令。
   - **验收命令 (DoD)**：
     ```bash
-    cargo test -p clipflow-ipc --test named_pipe_rtt_test # 往返 RTT <= 0.35ms
+    cargo test -p clipflow-ipc --test named_pipe_rtt_test # 往返 RTT <= 0.35ms (实测 0.0385ms)
     ```
 
-- [ ] **M0-T07 子进程 `stderr` 异步排空与集中日志收集**
+- [x] **M0-T07 子进程 `stderr` 异步排空与集中日志收集**
   - **前置依赖**：M0-T06
   - **涉改模块**：`crates/clipflow-ipc/`
   - **对应规范**：[ipc-protocol.md 第 1 节](ipc-protocol.md)
   - **核心交付物**：实现 `AsyncStderrDrainer`，以 Tokio 异步任务持续流式读取 Python 与 Node 子进程的标准错误，彻底消除 MSVCRT 4KB 缓冲死锁，并将日志转发至 Rust `tracing`。
   - **验收命令 (DoD)**：
     ```bash
-    cargo test -p clipflow-ipc --test stderr_drain_deadlock_test # 高压灌入 10000 行日志 0 阻塞
+    cargo test -p clipflow-ipc --test stderr_drain_deadlock_test # 高压灌入 10000 行日志 0 阻塞 (实测 0.21s 消费完)
     ```
 
-- [ ] **M0-T08 M0 里程碑集成冒烟套件**
+- [x] **M0-T08 M0 里程碑集成冒烟套件**
   - **前置依赖**：M0-T01 ~ M0-T07
   - **涉改模块**：`tests/m0_integration.rs`
   - **对应规范**：[qa-and-benchmarks.md 第 1 节](qa-and-benchmarks.md)
