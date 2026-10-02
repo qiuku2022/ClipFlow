@@ -1,4 +1,0 @@
-ffmpeg: unrecognized option '-filters'
-Some random text
-
-without any table
