@@ -11,13 +11,7 @@
 
 界面完全对齐 Premiere Pro 经典工业级剪辑工作台格局，采用**“上半屏三区分屏 + 下半屏 100% 满宽常驻时间线”**的稳固两层拓扑，彻底杜绝切页时的容器尺寸跳变与 egui 布局颠簸。
 
-### 1.1 界面实装视觉示意图 (Visual Reference Mockup)
-
-![ClipFlow 剪辑工作台整体界面实装示意图](./assets/clipflow-layout-reference.png)
-
-> **图示说明**：上图为 ClipFlow 剪辑工作台实装视觉效果，严格遵循 [ui-spec.md](./ui-spec.md) 的 Neutral Modern 深色模式规范（深岩灰底板 `#0F1115`、面板表面 `#171A21`、精密 12px/8px/4px 几何圆角、`#2F6FEB` 钴蓝播放指针与激活边框、达芬奇式 48px 底部 Dock 栏以及 PR 经典四区分屏）。
-
-### 1.2 网格拓扑与层级架构图 (Grid Topology Diagram)
+### 1.1 网格拓扑与层级架构图 (Grid Topology Diagram)
 
 ```mermaid
 flowchart TD
@@ -68,7 +62,7 @@ flowchart TD
     LowerZone --> BottomDock
 ```
 
-### 1.3 字符级线框排版图 (ASCII Wireframe)
+### 1.2 字符级线框排版图 (ASCII Wireframe)
 
 ```
 +----------------------------------------------------------------------------------------------------+
