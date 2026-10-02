@@ -1,0 +1,19 @@
+[project]
+name = "clipflow-worker"
+version = "0.1.0"
+description = "ClipFlow Python 智能计算与转写子进程"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.9",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"

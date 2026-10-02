@@ -1,0 +1,15 @@
+[package]
+name = "clipflow-app"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+clipflow-common.workspace = true
+clipflow-ui.workspace = true
+clipflow-ipc.workspace = true
+eframe.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true

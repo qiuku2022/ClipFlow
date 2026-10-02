@@ -1,0 +1,51 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/clipflow-common",
+    "crates/clipflow-timeline",
+    "crates/clipflow-media",
+    "crates/clipflow-ipc",
+    "crates/clipflow-ui",
+    "crates/clipflow-app",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["ClipFlow Authors"]
+license = "MIT"
+
+[workspace.dependencies]
+# 核心公共库与序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+uuid = { version = "1.10", features = ["v4", "v7", "serde"] }
+
+# 异步运行时与日志
+tokio = { version = "1.40", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# GUI 与渲染
+egui = "0.36"
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "wgpu"] }
+wgpu = "30.0"
+
+# Windows 原生平台 API
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_System_Pipes",
+    "Win32_Storage_FileSystem",
+    "Win32_Security",
+    "Win32_Security_Authorization"
+] }
+
+# 本地工作区 Crate 依赖
+clipflow-common = { path = "crates/clipflow-common" }
+clipflow-timeline = { path = "crates/clipflow-timeline" }
+clipflow-media = { path = "crates/clipflow-media" }
+clipflow-ipc = { path = "crates/clipflow-ipc" }
+clipflow-ui = { path = "crates/clipflow-ui" }

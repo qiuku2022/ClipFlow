@@ -1,0 +1,10 @@
+[package]
+name = "clipflow-media"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+clipflow-common.workspace = true
+clipflow-timeline.workspace = true

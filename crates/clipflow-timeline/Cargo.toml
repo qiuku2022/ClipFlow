@@ -1,0 +1,11 @@
+[package]
+name = "clipflow-timeline"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+clipflow-common.workspace = true
+serde.workspace = true
+uuid.workspace = true

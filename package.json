@@ -1,0 +1,12 @@
+{
+  "name": "clipflow-workspace",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ClipFlow Polyglot Monorepo - HyperFrames 动效渲染运行时",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Node.js 24 runtime ready\""
+  }
+}
