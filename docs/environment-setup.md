@@ -78,13 +78,36 @@ Rust 媒体管线 crate（`clipflow-media`）通过 `ffmpeg-sys-next` 绑定底�
 
 - **启动 Rust 主进程 (开发模式)**：
   ```powershell
-  cargo run
+  cargo run -p clipflow-app
   ```
 - **单独测试 Python 智能计算子进程 (ASR 与剪辑分析)**：
   ```powershell
   uv run python -m clipflow_worker.main
   ```
-- **运行 Rust 单元测试**：
+- **运行全工作区单元测试**：
   ```powershell
-  cargo test
+  cargo test --workspace
   ```
+
+---
+
+## 4. VS Code 一键调试与字体配置
+
+### 4.1 VS Code 自动化启动与断点调试矩阵
+仓库内已配置开箱即用的 `.vscode/` 调试与构建工具链：
+- **一键启动/断点调试 (`F5`)**：
+  - 配置位于 `.vscode/launch.json` 中的 `ClipFlow (Native App)` 项；
+  - 触发时自动运行 `cargo build -p clipflow-app` 增量编译，并挂载 Windows 原生调试器（优先 Visual Studio MSVC C++，或 CodeLLDB）；
+  - 支持在 UI 事件循环、时间线数据模型与音频时钟代码中自由设置断点、查看寄存器与调用堆栈。
+- **快捷构建任务 (`Ctrl+Shift+B`)**：
+  - 默认执行主应用编译任务；
+  - 另提供 `cargo check (workspace)`、`cargo test (workspace)`、`uv sync (python)` 等预置工作流任务。
+
+### 4.2 Windows 中文字体自动加载与排版
+在 `egui 0.36` 即时模式 GUI 渲染中，默认仅搭载英文字形库。若直接绘制中文字符串会导致字符缺失而呈现为 `□□`（豆腐块乱码）。
+
+ClipFlow 在主窗口初始化时（`ClipFlowTheme::init_fonts`）实现了系统级中文字体无感注入机制：
+1. 优先扫描并注册 Windows 核心矢量字体：`C:\Windows\Fonts\msyh.ttc`（微软雅黑）；
+2. 备选回退黑体：`C:\Windows\Fonts\simhei.ttf`；
+3. 将中文字形安全置入 `FontFamily::Proportional` 与 `FontFamily::Monospace` 字体列表首位，确保中英文、标点符号及时间码等宽混排时清晰细腻、永不乱码。
+
