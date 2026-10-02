@@ -5,8 +5,10 @@
 pub mod job_guard;
 pub mod named_pipe;
 pub mod protocol;
+pub mod stderr_drainer;
 
 pub use clipflow_common::*;
 pub use job_guard::JobGuard;
 pub use named_pipe::{NamedPipeServerWrapper, PipeClientWrapper, PipeSession};
 pub use protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
+pub use stderr_drainer::AsyncStderrDrainer;
