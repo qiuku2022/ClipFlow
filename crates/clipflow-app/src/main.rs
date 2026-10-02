@@ -154,10 +154,10 @@ impl eframe::App for ClipFlowApp {
             egui::vec2(total_rect.width(), dock_h),
         );
 
-        // 主内容视口矩形 (占满 Dock 以上全部空间)
+        // 主内容视口矩形 (四周留 8px 精致外边距，与底部 Dock 保持 4px 呼吸间距)
         let main_rect = egui::Rect::from_min_max(
-            total_rect.min,
-            egui::pos2(total_rect.right(), total_rect.bottom() - dock_h - 2.0),
+            egui::pos2(total_rect.left() + 8.0, total_rect.top() + 6.0),
+            egui::pos2(total_rect.right() - 8.0, total_rect.bottom() - dock_h - 4.0),
         );
 
         // 渲染主视口
