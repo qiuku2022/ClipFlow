@@ -66,17 +66,23 @@ impl EditWorkspaceView {
 
     /// 渲染 PR 经典上半屏 3 区分屏工作台 (素材库 25% + 双监视器 50% + 属性面板 25%)
     pub fn show(&mut self, ui: &mut egui::Ui, height: f32) {
-        let total_rect = ui.available_rect_before_wrap();
-        let total_w = total_rect.width();
+        let total_w = ui.available_width();
 
-        let w1 = (total_w * self.zone1_width_ratio - 4.0).max(120.0);
-        let w2 = (total_w * self.zone2_width_ratio - 8.0).max(240.0);
-        let w3 = (total_w * self.zone3_width_ratio - 4.0).max(120.0);
+        // 统一栏间距：2 个缝隙各 6px
+        let gap = 6.0;
+        let usable_w = (total_w - 2.0 * gap).max(300.0);
+
+        let w1 = (usable_w * self.zone1_width_ratio).floor();
+        let w3 = (usable_w * self.zone3_width_ratio).floor();
+        let w2 = usable_w - w1 - w3; // 精确互补，总和必恒等于 usable_w
 
         ui.allocate_ui_with_layout(
             egui::vec2(total_w, height),
             egui::Layout::left_to_right(egui::Align::Min),
             |ui| {
+                // 彻底消除 egui 隐式水平间距，由代码显式 gap 精确控制
+                ui.spacing_mut().item_spacing.x = 0.0;
+
                 // Zone 1: 项目素材面板
                 egui::Frame::new()
                     .fill(crate::theme::ClipFlowTheme::SURFACE)
@@ -120,7 +126,7 @@ impl EditWorkspaceView {
                         });
                     });
 
-                ui.add_space(4.0);
+                ui.add_space(gap);
 
                 // Zone 2: 双监视器视窗 (源监视器 + 节目监视器)
                 egui::Frame::new()
@@ -216,7 +222,7 @@ impl EditWorkspaceView {
                         });
                     });
 
-                ui.add_space(4.0);
+                ui.add_space(gap);
 
                 // Zone 3: 属性检查器面板
                 egui::Frame::new()
