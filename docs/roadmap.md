@@ -4,7 +4,7 @@
 > **更新时间**：2026-10-02  
 > **适用技术栈**：Rust 1.98, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
 > **状态索引**：`[ ]` 待开始 | `[/]` 进行中 | `[x]` 已完成并通过验收 | `[-]` 已废弃/跳过  
-> **当前活动里程碑**：**Milestone 0 (M0)**（已交付并通过端到端验收，下一阶段：**Milestone 1 (M1)**）  
+> **当前活动里程碑**：**Milestone 1 (M1)**（已全部交付并通过端到端验收，下一阶段：**Milestone 2 (M2)**）  
 > **核心地位**：指导 ClipFlow 全生命周期的任务分解、依赖时序、验收命令 (DoD) 与进度追踪的单一执行事实来源。
 
 ---
@@ -23,7 +23,7 @@
 ```mermaid
 flowchart TD
     M0["Milestone 0: 工程骨架与基础通信链路 (8 Tasks - 已交付)\nWorkspace / Common / UI 窗口 / JobGuard / 命名管道"]
-    M1["Milestone 1: 多媒体硬解播放与 PR 剪辑台 (11 Tasks)\nTimeline 模型 / 事务栈 / D3D11VA DMA / WASAPI 时钟 / PR 四区分屏"]
+    M1["Milestone 1: 多媒体硬解播放与 PR 剪辑台 (11 Tasks - 已交付)\nTimeline 模型 / 事务栈 / D3D11VA DMA / WASAPI 时钟 / PR 四区分屏"]
     M2["Milestone 2: 本地 ASR 转写、口播粗剪与工业切点外发 (12 Tasks)\nWhisper INT8 / 增量分片推送 / AgentTimelineAcl / FCP7 XML & EDL"]
     M3["Milestone 3: HyperFrames 动效包装与硬件加速母带导出 (11 Tasks)\nChromium 显存硬限 / 命名共享内存 / 双 Worker 乒乓池 / NVENC 导出"]
     M4["Milestone 4: 导演级 Agent 编排闭环与发布分发 (7 Tasks)\nDirectorPlan / Tool Calling / 可逆 Diff / 双轨缓存管理 / 便携打包"]
@@ -125,79 +125,79 @@ flowchart TD
 ## 4. Milestone 1 (M1)：媒体硬解播放与 PR 经典剪辑台 (Target Release: v0.1.0)
 
 - **核心目标**：打通 FFmpeg 9.0.2 D3D11VA 硬解到 wgpu 30.0 渲染链路，确立 WASAPI 硬件单调主时钟，交付完全对齐 Premiere Pro 四区分屏与多轨时间线剪辑台。
-- **总任务数**：11 个原子任务
+- **总任务数**：11 个原子任务（全部已交付完成并通过端到端验收）
 
-- [ ] **M1-T01 纯逻辑多轨数据模型与序列化 (`clipflow-timeline`)**
+- [x] **M1-T01 纯逻辑多轨数据模型与序列化 (`clipflow-timeline`)**
   - **前置依赖**：M0-T02
   - **涉改模块**：`crates/clipflow-timeline/`
   - **对应规范**：[timeline-data-model.md 第 2 节](timeline-data-model.md)
   - **核心交付物**：实现 `Project`, `Sequence`, `Track`, `Clip`, `Keyframe` 核心结构体，采用扁平 Uuid 索引，实现无环单向数据图。
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test model_tests`
 
-- [ ] **M1-T02 命令模式事务栈与 WAL 预写 (`clipflow-timeline`)**
+- [x] **M1-T02 命令模式事务栈与 WAL 预写 (`clipflow-timeline`)**
   - **前置依赖**：M1-T01
   - **涉改模块**：`crates/clipflow-timeline/`
   - **对应规范**：[timeline-data-model.md 第 3 节](timeline-data-model.md)
   - **核心交付物**：实现 `TimelineCommand` Trait 及插入切片、删除切片、分割切片等原子命令，实现基于内存栈的 Undo/Redo 与 `session.wal` 追加流写入。
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test undo_redo_wal_tests`
 
-- [ ] **M1-T03 FFmpeg 9.0.2 D3D11VA 硬件解码与锁页帧池 (`clipflow-media`)**
+- [x] **M1-T03 FFmpeg 9.0.2 D3D11VA 硬件解码与锁页帧池 (`clipflow-media`)**
   - **前置依赖**：M0-T01, M0-T02
   - **涉改模块**：`crates/clipflow-media/`
   - **对应规范**：[media-pipeline-spec.md 第 2 节](media-pipeline-spec.md)
   - **核心交付物**：绑定 `ffmpeg-sys-next`，配置 D3D11VA 硬件加速提取 NV12 数据，实现 `PinnedFramePool`（`VirtualAlloc` + `VirtualLock` 钉住物理内存），支持零拷贝 DMA 直传。
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test d3d11va_dma_test`
 
-- [ ] **M1-T04 WGSL NV12 双平面转 RGBA 色彩矩阵着色器 (`clipflow-media`)**
+- [x] **M1-T04 WGSL NV12 双平面转 RGBA 色彩矩阵着色器 (`clipflow-media`)**
   - **前置依赖**：M1-T03
   - **涉改模块**：`crates/clipflow-media/shaders/nv12_to_rgba.wgsl`
   - **对应规范**：[media-pipeline-spec.md 第 2.3 节](media-pipeline-spec.md)
   - **核心交付物**：编写 wgpu 全屏大三角形着色器，实现 BT.709/BT.601 与 Limited/Full Range 自动矩阵切换，色彩精度 $\Delta E_{00} \le 0.5$。
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test color_matrix_accuracy`
 
-- [ ] **M1-T05 WASAPI 原生硬件单调主时钟与迟滞比较器 (`clipflow-media`)**
+- [x] **M1-T05 WASAPI 原生硬件单调主时钟与迟滞比较器 (`clipflow-media`)**
   - **前置依赖**：M0-T01, M0-T02
   - **涉改模块**：`crates/clipflow-media/`
   - **对应规范**：[media-pipeline-spec.md 第 3 节](media-pipeline-spec.md)
   - **核心交付物**：实现 `cpal` WASAPI 输出流，挂接 `IAudioClock` 硬件采样游标，封装 `MonotonicClampedClock`（无锁 CAS，时间回退严格为 0，单次查询 $\le 15\text{ns}$），引入施密特双阈值迟滞比较器消除 10ms 拍频顿挫。
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test monotonic_clock_test`
 
-- [ ] **M1-T06 音频波形峰值文件 (`.peak`) 提取与多级 LOD 金字塔**
+- [x] **M1-T06 音频波形峰值文件 (`.peak`) 提取与多级 LOD 金字塔**
   - **前置依赖**：M1-T03
   - **涉改模块**：`crates/clipflow-media/`
   - **对应规范**：[media-pipeline-spec.md 第 4.4 节](media-pipeline-spec.md) & [cache-and-storage-spec.md](cache-and-storage-spec.md)
   - **核心交付物**：实现后台音频流分块扫描，生成存储于 `.clipflow_cache/` 的 `.peak` 二进制波形，支持自适应 LOD 精度读取与顶点 Mesh 复用。
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test waveform_lod_test`
 
-- [ ] **M1-T07 PR 经典两层分屏工作台界面实现 (`clipflow-ui`)**
+- [x] **M1-T07 PR 经典两层分屏工作台界面实现 (`clipflow-ui`)**
   - **前置依赖**：M0-T03, M1-T01
   - **涉改模块**：`crates/clipflow-ui/`
   - **对应规范**：[edit-layout-spec.md 第 1~2 节](edit-layout-spec.md)
   - **核心交付物**：在上半屏构建 25% 项目素材面板、50% 双监视器视窗（源监视器/节目监视器，集成 wgpu 硬件纹理贴图）、25% 属性效果面板，下半屏铺满 100% 满宽时间线底座。
   - **验收命令 (DoD)**：`cargo test -p clipflow-ui --test pr_layout_render_test`
 
-- [ ] **M1-T08 核心多轨公用时间线视图与二维视口裁剪 (`clipflow-ui`)**
+- [x] **M1-T08 核心多轨公用时间线视图与二维视口裁剪 (`clipflow-ui`)**
   - **前置依赖**：M1-T07
   - **涉改模块**：`crates/clipflow-ui/`
   - **对应规范**：[edit-layout-spec.md 第 4 节](edit-layout-spec.md)
   - **核心交付物**：实现多轨标尺绘制、V1~V3 与 A1~A3 轨道头渲染、正交二维 AABB 视口裁剪二分算法，支持滚轮平移与播放头实时跟随，单帧 UI 细分耗时 $\le 1.0\text{ms}$。
   - **验收命令 (DoD)**：`cargo test -p clipflow-ui --test viewport_culling_perf`
 
-- [ ] **M1-T09 J-K-L 动态飞梭走带与剪辑修饰键行为矩阵 (`clipflow-ui`)**
+- [x] **M1-T09 J-K-L 动态飞梭走带与剪辑修饰键行为矩阵 (`clipflow-ui`)**
   - **前置依赖**：M1-T08, M1-T05
   - **涉改模块**：`crates/clipflow-ui/`
   - **对应规范**：[edit-layout-spec.md 第 2.5 节](edit-layout-spec.md)
   - **核心交付物**：实现 J-K-L 级联倍速走带状态机（$1\times \sim 16\times$ 正反飞梭）、`Alt + 拖拽` 原地复制切片副本、`Alt + 滚轮` 以鼠标光标为中心缩放时间轴、`S` 键磁吸吸附切换及 `Shift` 临时反转。
   - **验收命令 (DoD)**：`cargo test -p clipflow-ui --test shuttle_keybinds_test`
 
-- [ ] **M1-T10 监视器 1/4 代理流控与 DeviceLost 容灾看门狗 (`clipflow-media`)**
+- [x] **M1-T10 监视器 1/4 代理流控与 DeviceLost 容灾看门狗 (`clipflow-media`)**
   - **前置依赖**：M1-T03, M1-T04
   - **涉改模块**：`crates/clipflow-media/`
   - **对应规范**：[architecture.md 第 4.4 节](architecture.md)
   - **核心交付物**：实现 `ProxyGovernor` 调度器（快速拖拽自动切入 540p 代理，带宽 $\le 60\text{MB/s}$，拖拽延迟 $\le 25\text{ms}$）；模拟 DirectX 设备丢失，管线在 $100\text{ms}$ 内无感重建。
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test device_lost_recovery_test`
 
-- [ ] **M1-T11 M1 音画同步与 60 FPS 播放全链路验收**
+- [x] **M1-T11 M1 音画同步与 60 FPS 播放全链路验收**
   - **前置依赖**：M1-T01 ~ M1-T10
   - **涉改模块**：`tests/m1_av_sync_bench.rs`
   - **对应规范**：[qa-and-benchmarks.md 第 2 节](qa-and-benchmarks.md)

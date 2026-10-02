@@ -7,8 +7,11 @@ license.workspace = true
 
 [dependencies]
 clipflow-common.workspace = true
+clipflow-timeline.workspace = true
+clipflow-media.workspace = true
 clipflow-ui.workspace = true
 clipflow-ipc.workspace = true
+uuid.workspace = true
 eframe.workspace = true
 tokio.workspace = true
 tracing.workspace = true
@@ -21,3 +24,7 @@ serde_json.workspace = true
 [[test]]
 name = "m0_integration"
 path = "../../tests/m0_integration.rs"
+
+[[test]]
+name = "m1_av_sync_bench"
+path = "../../tests/m1_av_sync_bench.rs"
