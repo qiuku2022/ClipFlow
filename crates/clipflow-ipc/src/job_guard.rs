@@ -65,8 +65,12 @@ impl JobGuard {
     }
 
     /// 将已有的进程句柄纳入 Job Object 管理
-    pub fn assign_process_handle(&self, process_handle: HANDLE) -> Result<()> {
-        let res = unsafe { AssignProcessToJobObject(self.handle, process_handle) };
+    ///
+    /// # Safety
+    ///
+    /// 调用方必须确保 `process_handle` 是有效且具备 PROCESS_SET_QUOTA 与 PROCESS_TERMINATE 权限的 Win32 进程句柄。
+    pub unsafe fn assign_process_handle(&self, process_handle: HANDLE) -> Result<()> {
+        let res = AssignProcessToJobObject(self.handle, process_handle);
         if res == 0 {
             return Err(ClipFlowError::Ipc(format!(
                 "AssignProcessToJobObject 失败: {}",
@@ -79,7 +83,7 @@ impl JobGuard {
     /// 将运行中的 std::process::Child 纳入 Job Object 管理
     pub fn assign_child(&self, child: &Child) -> Result<()> {
         let raw_handle = child.as_raw_handle() as HANDLE;
-        self.assign_process_handle(raw_handle)
+        unsafe { self.assign_process_handle(raw_handle) }
     }
 
     /// 启动子进程并原子绑定至 Job Object

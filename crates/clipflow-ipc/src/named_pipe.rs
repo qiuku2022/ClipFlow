@@ -116,6 +116,37 @@ impl PipeSession {
 
         Ok(())
     }
+
+    /// 发送一个 JSON-RPC 请求
+    pub async fn send_request(&mut self, request: &JsonRpcRequest) -> Result<()> {
+        let mut json = serde_json::to_string(request)
+            .map_err(|e| ClipFlowError::Ipc(format!("序列化请求失败: {}", e)))?;
+        json.push('\n');
+
+        self.writer
+            .write_all(json.as_bytes())
+            .await
+            .map_err(|e| ClipFlowError::Ipc(format!("写入管道请求失败: {}", e)))?;
+        self.writer
+            .flush()
+            .await
+            .map_err(|e| ClipFlowError::Ipc(format!("刷新管道缓冲失败: {}", e)))?;
+
+        Ok(())
+    }
+
+    /// 读取一个 JSON-RPC 响应
+    pub async fn read_response(&mut self) -> Result<JsonRpcResponse> {
+        let line = self
+            .lines
+            .next_line()
+            .await
+            .map_err(|e| ClipFlowError::Ipc(format!("读取管道响应错误: {}", e)))?
+            .ok_or_else(|| ClipFlowError::Ipc("管道连接已被对端关闭".to_string()))?;
+
+        serde_json::from_str(&line)
+            .map_err(|e| ClipFlowError::Ipc(format!("反序列化 JSON-RPC 响应失败: {}: {}", e, line)))
+    }
 }
 
 /// 客户端管道包装

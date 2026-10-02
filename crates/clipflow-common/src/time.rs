@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::ops::{Add, Neg, Sub};
 
 /// 有理数时间戳，表示为: ticks / timescale
-#[derive(Debug, Clone, Copy, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 pub struct RationalTime {
     /// 刻度数（可为负值，用于相对位移）
     pub value: i64,
@@ -96,6 +97,28 @@ impl PartialEq for RationalTime {
     }
 }
 
+fn gcd(mut a: u64, mut b: u64) -> u64 {
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+    a
+}
+
+impl Hash for RationalTime {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        if self.value == 0 {
+            0i64.hash(state);
+            1u32.hash(state);
+        } else {
+            let g = gcd(self.value.unsigned_abs(), self.timescale as u64);
+            (self.value / g as i64).hash(state);
+            (self.timescale / g as u32).hash(state);
+        }
+    }
+}
+
 impl PartialOrd for RationalTime {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
@@ -180,14 +203,6 @@ pub struct SmpteTimecode {
 }
 
 impl SmpteTimecode {
-    pub fn to_string(&self) -> String {
-        let delimiter = if self.is_drop_frame { ';' } else { ':' };
-        format!(
-            "{:02}:{:02}:{:02}{}{:02}",
-            self.hours, self.minutes, self.seconds, delimiter, self.frames
-        )
-    }
-
     pub fn from_rational_time(time: RationalTime, fps: FrameRate) -> Self {
         let (fps_num, fps_den) = fps.fps_rational();
         // 计算当前时间的总帧数: (time.value * fps_num) / (time.timescale * fps_den)
@@ -218,6 +233,11 @@ impl SmpteTimecode {
 
 impl fmt::Display for SmpteTimecode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        let delimiter = if self.is_drop_frame { ';' } else { ':' };
+        write!(
+            f,
+            "{:02}:{:02}:{:02}{}{:02}",
+            self.hours, self.minutes, self.seconds, delimiter, self.frames
+        )
     }
 }

@@ -287,9 +287,11 @@ dependencies = [
  "clipflow-ipc",
  "clipflow-ui",
  "eframe",
+ "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
