@@ -1,0 +1,86 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug ClipFlow (CodeLLDB 推荐)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=clipflow-app",
+                    "--package=clipflow-app"
+                ],
+                "filter": {
+                    "name": "clipflow-app",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "info,clipflow=debug",
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "name": "Debug ClipFlow (MSVC C++ 调试器)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/clipflow-app.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                { "name": "RUST_LOG", "value": "info,clipflow=debug" },
+                { "name": "RUST_BACKTRACE", "value": "1" }
+            ],
+            "preLaunchTask": "cargo build (clipflow-app)"
+        },
+        {
+            "name": "Debug M1 集成音画测试 (CodeLLDB)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--test=m1_av_sync_bench",
+                    "--package=clipflow-app"
+                ],
+                "filter": {
+                    "name": "m1_av_sync_bench",
+                    "kind": "test"
+                }
+            },
+            "args": ["--", "--nocapture"],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_BACKTRACE": "1"
+            }
+        },
+        {
+            "name": "Debug 当前测试 (CodeLLDB)",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib"
+                ]
+            },
+            "args": ["--", "--nocapture"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "name": "Python: 启动 Worker (uv 虚拟环境)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/python/clipflow_worker/main.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+        }
+    ]
+}

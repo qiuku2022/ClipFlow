@@ -1,0 +1,11 @@
+{
+    "recommendations": [
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "ms-vscode.cpptools",
+        "charliermarsh.ruff",
+        "ms-python.python",
+        "tamasfe.even-better-toml",
+        "serayuzgur.crates"
+    ]
+}

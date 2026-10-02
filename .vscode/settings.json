@@ -1,0 +1,30 @@
+{
+    "rust-analyzer.cargo.buildScripts.enable": true,
+    "rust-analyzer.check.command": "clippy",
+    "rust-analyzer.check.extraArgs": [
+        "--",
+        "-W",
+        "clippy::all"
+    ],
+    "rust-analyzer.inlayHints.lifetimeElisionHints.enable": "skip_trivial",
+    "rust-analyzer.procMacro.enable": true,
+    "terminal.integrated.defaultProfile.windows": "PowerShell",
+    "terminal.integrated.profiles.windows": {
+        "PowerShell": {
+            "source": "PowerShell",
+            "icon": "terminal-powershell",
+            "path": ["pwsh.exe", "powershell.exe"]
+        }
+    },
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe",
+    "files.watcherExclude": {
+        "**/target/**": true,
+        "**/.venv/**": true,
+        "**/.clipflow_cache/**": true
+    },
+    "search.exclude": {
+        "**/target": true,
+        "**/.venv": true,
+        "**/.clipflow_cache": true
+    }
+}
