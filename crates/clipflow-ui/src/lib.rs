@@ -6,9 +6,11 @@ pub mod dock;
 pub mod state;
 pub mod theme;
 pub mod timeline_placeholder;
+pub mod views;
 
 pub use clipflow_common::*;
 pub use dock::{WorkflowDock, WorkflowPage};
 pub use state::{AppState, RepaintScheduler, RepaintState};
 pub use theme::ClipFlowTheme;
 pub use timeline_placeholder::render_timeline_placeholder;
+pub use views::*;
