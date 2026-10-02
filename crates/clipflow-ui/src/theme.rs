@@ -91,4 +91,41 @@ impl ClipFlowTheme {
 
         ctx.set_visuals(visuals);
     }
+
+    /// 初始化中文字体支持 (Windows 微软雅黑 / 备选黑体)
+    pub fn init_fonts(ctx: &egui::Context) {
+        let mut fonts = egui::FontDefinitions::default();
+
+        let font_candidates = [
+            r"C:\Windows\Fonts\msyh.ttc",   // 微软雅黑
+            r"C:\Windows\Fonts\msyh.ttf",
+            r"C:\Windows\Fonts\simhei.ttf", // 黑体
+            r"C:\Windows\Fonts\simsun.ttc", // 宋体
+        ];
+
+        for path in font_candidates {
+            if let Ok(font_bytes) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    "chinese_font".to_owned(),
+                    std::sync::Arc::new(egui::FontData::from_owned(font_bytes)),
+                );
+
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Proportional)
+                    .or_default()
+                    .insert(0, "chinese_font".to_owned());
+
+                fonts
+                    .families
+                    .entry(egui::FontFamily::Monospace)
+                    .or_default()
+                    .push("chinese_font".to_owned());
+
+                ctx.set_fonts(fonts);
+                break;
+            }
+        }
+    }
 }
+

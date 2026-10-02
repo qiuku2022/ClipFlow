@@ -6,7 +6,7 @@ use clipflow_media::render::{DeviceLostWatchdog, ProxyGovernor};
 use clipflow_timeline::models::{
     AudioProperties, CanvasSize, Clip, ClipPayload, Sequence, Track, TrackKind, Transform2D,
 };
-use clipflow_ui::dock::WorkflowDock;
+use clipflow_ui::dock::{WorkflowDock, WorkflowPage};
 use clipflow_ui::interaction::ShuttleController;
 use clipflow_ui::state::{AppState, RepaintState};
 use clipflow_ui::theme::ClipFlowTheme;
@@ -41,7 +41,7 @@ fn create_demo_clip(name: &str, start_ticks: i64, dur_ticks: i64, timescale: u32
 
 struct ClipFlowApp {
     state: AppState,
-    _edit_workspace: EditWorkspaceView,
+    edit_workspace: EditWorkspaceView,
     _timeline_canvas: SharedTimelineCanvas,
     _sequence: Sequence,
     shuttle: ShuttleController,
@@ -53,6 +53,9 @@ struct ClipFlowApp {
 
 impl ClipFlowApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // 1. 初始化中文字体支持 (Windows 微软雅黑 / 黑体)
+        ClipFlowTheme::init_fonts(&cc.egui_ctx);
+        // 2. 注入全局 Neutral Modern 深色视觉主题
         ClipFlowTheme::apply_to(&cc.egui_ctx);
 
         // 初始化示范工程与多轨序列
@@ -86,9 +89,12 @@ impl ClipFlowApp {
         seq.tracks.push(v1);
         seq.tracks.push(a1);
 
+        let mut state = AppState::default();
+        state.active_page = WorkflowPage::Edit; // 默认进入 PR 经典剪辑工作台
+
         Self {
-            state: AppState::default(),
-            _edit_workspace: EditWorkspaceView::new(),
+            state,
+            edit_workspace: EditWorkspaceView::new(),
             _timeline_canvas: SharedTimelineCanvas::new(),
             _sequence: seq,
             shuttle: ShuttleController::new(),
@@ -132,79 +138,115 @@ impl eframe::App for ClipFlowApp {
             self.state.scheduler.on_user_interaction();
         }
 
-        // 3. 门控调度
+        // 3. 门控重绘调度
         let gating = self.state.scheduler.update_gating(self.state.is_playing);
         if gating != RepaintState::Dormant {
             ctx.request_repaint_after(std::time::Duration::from_millis(16));
         }
 
-        // 4. PR 经典分屏工作台布局
+        // 4. 视口绝对布局划分：Dock 贴底 + 主内容区铺满
         let total_rect = ui.available_rect_before_wrap();
-        let timeline_height = 240.0;
-        let upper_height =
-            (total_rect.height() - timeline_height - WorkflowDock::HEIGHT - 16.0).max(150.0);
+        let dock_h = WorkflowDock::HEIGHT;
 
-        // 上半屏：当前工作流页面视窗 (58% 经典分屏)
-        ui.allocate_ui_with_layout(
-            egui::vec2(total_rect.width(), upper_height),
-            egui::Layout::top_down(egui::Align::Min),
-            |ui| {
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    ui.heading(
-                        egui::RichText::new("ClipFlow")
-                            .color(ClipFlowTheme::TEXT_PRIMARY)
-                            .strong(),
-                    );
+        // 底部 Dock 矩形 (紧贴窗口最下端)
+        let dock_rect = egui::Rect::from_min_size(
+            egui::pos2(total_rect.left(), total_rect.bottom() - dock_h),
+            egui::vec2(total_rect.width(), dock_h),
+        );
+
+        // 主内容视口矩形 (占满 Dock 以上全部空间)
+        let main_rect = egui::Rect::from_min_max(
+            total_rect.min,
+            egui::pos2(total_rect.right(), total_rect.bottom() - dock_h - 2.0),
+        );
+
+        // 渲染主视口
+        let mut main_ui = ui.new_child(egui::UiBuilder::new().max_rect(main_rect));
+        {
+            let ui = &mut main_ui;
+            // 顶部状态栏
+            ui.horizontal(|ui| {
+                ui.heading(
+                    egui::RichText::new("ClipFlow")
+                        .color(ClipFlowTheme::TEXT_PRIMARY)
+                        .strong()
+                        .size(15.0),
+                );
+                ui.label(
+                    egui::RichText::new(format!(
+                        "当前工作区: {} ({}) | 走带速度: {}x ({:?})",
+                        self.state.active_page.as_str(),
+                        self.state.active_page.label_zh(),
+                        self.shuttle.speed_multiplier(),
+                        self.shuttle.direction()
+                    ))
+                    .color(ClipFlowTheme::COBALT_ACCENT),
+                );
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
                         egui::RichText::new(format!(
-                            "当前工作区: {} ({}) | 走带速度: {}x ({:?})",
-                            self.state.active_page.as_str(),
-                            self.state.active_page.label_zh(),
-                            self.shuttle.speed_multiplier(),
-                            self.shuttle.direction()
+                            "门控调度: {:?} | 播放头: {}",
+                            gating, self.state.playhead
                         ))
-                        .color(ClipFlowTheme::COBALT_ACCENT),
+                        .color(ClipFlowTheme::TEXT_MUTED)
+                        .size(11.0),
                     );
                 });
+            });
 
-                ui.add_space(8.0);
+            ui.add_space(4.0);
 
+            let avail_h = ui.available_height();
+
+            if self.state.active_page == WorkflowPage::Edit {
+                // M1 PR 经典剪辑工作台：上半屏 58% + 下半屏 42% 满宽时间线
+                let split_ratio = self.edit_workspace.upper_height_ratio();
+                let upper_h = (avail_h * split_ratio - 4.0).max(180.0);
+
+                // 上半屏：素材库 25% + 双监视器 50% + 检查器 25%
+                self.edit_workspace.show(ui, upper_h);
+
+                ui.add_space(4.0);
+
+                // 下半屏：铺满剩余高度的多轨时间线
+                render_timeline_placeholder(ui, &self.state);
+            } else {
+                // 其他工作流页面视窗 (如 Agent 导演页、动效页)
+                let card_h = (avail_h * 0.55).max(160.0);
                 egui::Frame::new()
                     .fill(ClipFlowTheme::SURFACE)
                     .stroke(egui::Stroke::new(1.0, ClipFlowTheme::BORDER))
                     .corner_radius(ClipFlowTheme::RADIUS_PANEL)
-                    .inner_margin(12.0)
+                    .inner_margin(16.0)
                     .show(ui, |ui| {
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "{} 视窗内容区 (M1 PR 经典剪辑工作台)",
-                                self.state.active_page.label_zh()
-                            ))
-                            .color(ClipFlowTheme::TEXT_PRIMARY)
-                            .strong(),
-                        );
-                        ui.add_space(4.0);
-                        ui.label(
-                            egui::RichText::new(format!(
-                                "门控状态: {:?} | 播放头: {}",
-                                gating, self.state.playhead
-                            ))
-                            .color(ClipFlowTheme::TEXT_MUTED),
-                        );
+                        ui.set_height(card_h);
+                        ui.vertical_centered(|ui| {
+                            ui.add_space(20.0);
+                            ui.heading(
+                                egui::RichText::new(format!(
+                                    "{} 工作区",
+                                    self.state.active_page.label_zh()
+                                ))
+                                .color(ClipFlowTheme::TEXT_PRIMARY),
+                            );
+                            ui.add_space(8.0);
+                            ui.label(
+                                egui::RichText::new("该模块将在后续对应里程碑中持续交付")
+                                    .color(ClipFlowTheme::TEXT_MUTED),
+                            );
+                        });
                     });
-            },
-        );
 
-        ui.add_space(8.0);
+                ui.add_space(4.0);
 
-        // 下半屏：全局公用时间线底座
-        render_timeline_placeholder(ui, &self.state);
+                // 时间线常驻保活
+                render_timeline_placeholder(ui, &self.state);
+            }
+        }
 
-        ui.add_space(4.0);
-
-        // 底部达芬奇 48px Dock 栏
-        WorkflowDock::show(ui, &mut self.state.active_page);
+        // 渲染底部 Dock 栏 (绝对定位贴底)
+        let mut dock_ui = ui.new_child(egui::UiBuilder::new().max_rect(dock_rect));
+        WorkflowDock::show(&mut dock_ui, &mut self.state.active_page);
     }
 }
 
