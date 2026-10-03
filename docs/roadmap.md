@@ -26,7 +26,7 @@ flowchart TD
     M1["Milestone 1: 多媒体硬解播放与 PR 剪辑台 (11 Tasks)\nTimeline 模型 / 事务栈 / D3D11VA DMA / WASAPI 时钟 / PR 四区分屏"]
     M2["Milestone 2: 本地 ASR 转写、口播粗剪与工业切点外发 (12 Tasks)\nWhisper INT8 / 增量分片推送 / AgentTimelineAcl / FCP7 XML & EDL"]
     M3["Milestone 3: HyperFrames 动效包装与硬件加速母带导出 (11 Tasks)\nChromium 显存硬限 / 命名共享内存 / 双 Worker 乒乓池 / NVENC 导出"]
-    M4["Milestone 4: 导演级 Agent 编排闭环与发布分发 (7 Tasks)\nDirectorPlan / Tool Calling / 可逆 Diff / 双轨缓存管理 / 便携打包"]
+    M4["Milestone 4: 导演级 Agent 编排闭环与发布分发 (7 Tasks)\nMaster-SubAgent 意图解构 / Staged DAG 编译 / 可逆 Diff / 便携打包"]
 
     M0 --> M1 --> M2 --> M3 --> M4
 ```
@@ -387,25 +387,27 @@ flowchart TD
 - **核心目标**：打通大语言模型意图理解到时间轴 Tool Calling 自动化编排，交付可逆 Diff 审查看板，完成 NSIS 与便携绿色版安装包打包分发。
 - **总任务数**：7 个原子任务
 
-- [ ] **M4-T01 `DirectorPlan` 指令集、只读工具与 Tool-Result 自愈回环 (`clipflow-timeline`)**
+- [ ] **M4-T01 `DirectorPlan` 指令集、只读感知、Staged DAG 编译器与自愈回环 (`clipflow-timeline`)**
   - **前置依赖**：M1-T01, M2-T04
   - **涉改模块**：`crates/clipflow-timeline/`
-  - **对应规范**：[agent-director-spec.md 第 3 节](agent-director-spec.md)
-  - **核心交付物**：实现时间线只读感知工具（`timeline_query_project`, `timeline_query_range`, `timeline_query_cut_candidates`, `asset_search`）；解析大模型生成的包含分段大纲、切点列表、BGM 选配及动效参数的 JSON Schema；实现 `ToolExecutionResult` 结构化回环协议与片段失效（`ERR_CLIP_EXPIRED`）最多 2 次局部自愈重试逻辑。
+  - **对应规范**：[agent-director-spec.md 第 3-4 节](agent-director-spec.md)
+  - **核心交付物**：实现时间线只读感知工具（`timeline_query_project`, `timeline_query_range`, `timeline_query_cut_candidates`, `asset_search`）；解析大模型基于源素材时间标尺生成的包含分段大纲、切点列表、BGM 选配及动效参数的 `DirectorPlan` JSON Schema；实现 4 阶段流水线分阶段执行图编译器（Staged DAG Compiler：Stage 1 源时间倒序波纹切除 $\to$ Stage 2 坐标映射 `TimeMapping` $\to$ Stage 3 视觉增量 B-Roll 与 HyperFrames $\to$ Stage 4 声音增量配乐与 Ducking），最终打包为单一原子 `CompoundCommand`；实现两级自愈回环协议（局部轻微偏差 2 轮内自愈，结构性冲突触发 `Reflection` 结构化反思回环重新编排局部子图）。
   - **验收命令 (DoD)**：
     ```bash
     cargo test -p clipflow-timeline --test director_plan_parser_test
+    cargo test -p clipflow-timeline --test staged_dag_compiler_test
     cargo test -p clipflow-timeline --test tool_calling_and_healing_test
     ```
 
-- [ ] **M4-T02 大模型意图规划、Prompt 引擎与 LlmGovernor 容灾调度**
+- [ ] **M4-T02 Master 意图解构、IntentRouter 调度、TimelineMemoryIndex 与 LlmGovernor 容灾**
   - **前置依赖**：M4-T01
   - **涉改模块**：`crates/clipflow-app/`
-  - **对应规范**：[agent-director-spec.md 第 2 节](agent-director-spec.md) & [security-and-privacy.md 第 6 节](security-and-privacy.md)
-  - **核心交付物**：实现对长篇 Whisper 台词的分层大纲压缩（Hierarchical Chunking）与本地 Tokenizer 预算预检；构建带 `<untrusted_audio_transcript>` 定界标签与防间接注入过滤的导演提示词工程；实现 `LlmGovernor` 三级容灾状态机（重试 $\to$ 模型降级链 $\to$ 本地纯声学物理粗剪兜底）；LLM API Key 通过 Windows DPAPI（`CryptProtectData`）加密存储至 `%LOCALAPPDATA%\ClipFlow\config\credentials.bin`。
+  - **对应规范**：[agent-director-spec.md 第 1-2 节](agent-director-spec.md) & [security-and-privacy.md 第 6 节](security-and-privacy.md)
+  - **核心交付物**：构建常驻内存的 `TimelineMemoryIndex`（声学时序锚点 + 章节缓存 + 历史拒绝特征指纹），支持 Agent 局部只读按需召回，Token 预算降低 $\ge 65\%$；实现 Master Director 宏观大纲解析与 `IntentRouter` 意图解构，并行分发调度 `PacingCutter`（气口剪除）、`PackagingPlanner`（动效包装）与 `AudioPlanner`（BGM 避让）3 大专职子规划器并合成全局方案；构建带 `<untrusted_audio_transcript>` 定界标签与对抗注入扫描的导演提示词工程；实现 `LlmGovernor` 三级容灾状态机（重试 $\to$ 模型降级链 $\to$ 本地纯声学物理粗剪兜底）；LLM API Key 通过 Windows DPAPI（`CryptProtectData`）加密存储至 `%LOCALAPPDATA%\ClipFlow\config\credentials.bin`。
   - **验收命令 (DoD)**：
     ```bash
-    cargo test -p clipflow-app --test llm_director_prompt_test
+    cargo test -p clipflow-app --test timeline_memory_index_test
+    cargo test -p clipflow-app --test llm_director_intent_router_test
     cargo test -p clipflow-app --test llm_governor_fallback_test
     ```
 
@@ -427,7 +429,7 @@ flowchart TD
   - **前置依赖**：M1-T02
   - **涉改模块**：`crates/clipflow-timeline/`, `crates/clipflow-ui/`
   - **对应规范**：[timeline-data-model.md 第 2.5 & 4 节](timeline-data-model.md) & [cache-and-storage-spec.md](cache-and-storage-spec.md)
-  - **核心交付物**：实现工程元数据的 Zstandard 压缩序列化，持久化存储 `AgentProjectSession`（含分幕大纲、活跃方案与用户拒绝切点的负样本记忆）；在偏好设置提供当前工程缓存大小查看、一键清理代理/动效及孤儿缓存扫描清理功能。
+  - **核心交付物**：实现工程元数据的 Zstandard 压缩序列化，持久化存储 `AgentProjectSession`（沉淀映射 `TimelineMemoryIndex` 的分幕大纲、活跃方案与用户拒绝切点的负样本记忆，实现工程重开零 Token 恢复记忆）；在偏好设置提供当前工程缓存大小查看、一键清理代理/动效及孤儿缓存扫描清理功能。
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test project_container_zstd_test`
 
 - [ ] **M4-T06 复合运行时编排与 Portable 便携版自动化构建**

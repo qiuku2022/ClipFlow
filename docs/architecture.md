@@ -162,14 +162,15 @@ flowchart TD
 ## 5. 导演级 Agent 工作流与协同机制
 
 1. **意图与规划阶段 (Agent 界面)**：
-   - 用户上传长素材，Agent 自动调用 Python 子进程进行全局 ASR 与口播静音/错重分析。
-   - Agent 输出《剪辑方案规划案》：包含主题分段、节奏高潮点、精简后的口播台词清单、建议的 BGM 情绪与动效位置。
+   - 用户上传长素材，Python 子进程完成 ASR 词级转写与 VAD 气口能量分析，构建常驻宿主的 `TimelineMemoryIndex`（声学时序锚点 + 章节缓存 + 负样本特征指纹）。
+   - Master Director 进行宏观叙事分解与章节大纲定位，Intent Router 调度 3 大专职子规划模块（`PacingCutter` 口播剪除、`PackagingPlanner` 动效包装、`AudioPlanner` 配乐避让）并行计算，输出基于源素材时间标尺的结构化《导演剪辑方案 (Director Plan)》。
 2. **执行与下发阶段**：
-   - 用户确认或修改方案后，Agent 将结构化剪辑脚本转换为 Rust 的 `Sequence` 指令集。
-   - Rust 核心执行自动粗剪，将素材片段瞬间铺排到多轨时间轴上。
+   - 方案在公用时间线上生成半透明 Ghost Layer 虚拟投影供创作者审查。
+   - 创作者显式确认采纳后，Rust 宿主 Staged DAG 编译器依次执行 4 阶段流水线：Stage 1 源时间倒序波纹剪除 $\to$ Stage 2 坐标映射函数（`TimeMapping`） $\to$ Stage 3 挂载 B-Roll 与 HyperFrames 动效 $\to$ Stage 4 铺设 BGM 与 Ducking 避让。
+   - 全部步骤原子化编译为单一 `CompoundCommand` 写入公用时间轴（SSOT），毫秒级铺排并支持 `Ctrl + Z` 完全撤销；若发生轨道碰撞，触发 `Reflection` 反思回环仅局部重编排受损子图。
 3. **动效生成与合成阶段 (动画界面)**：
    - Agent 根据文案生成 HyperFrames 动效代码（HTML/CSS）。
-   - 调度 HyperFrames 离屏渲染出带透明通道的切片，挂载到时间轴高层轨道（如 V2/V3）。
+   - 调度 HyperFrames 离屏渲染出带透明通道的切片，挂载到时间轴高层轨道（如 V2/V3/FX）。
 4. **人工微调与导出阶段 (剪辑/导出界面)**：
    - 用户在对齐 PR 的专业时间轴中进行毫秒级微调。
    - 在“导出”页面调用 FFmpeg 9.0.2 硬件加速完成母带输出。

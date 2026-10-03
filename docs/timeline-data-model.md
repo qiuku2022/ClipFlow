@@ -662,7 +662,7 @@ pub struct AgentUserPreferences {
     pub bgm_ducking_preference_db: Option<f32>,
 }
 ```
-*注：该字段随 `Project` 一并序列化至 `.clipflow` 容器内部，经 Zstandard 压缩存储，体积增加小于 15KB，但在异机迁移和重新打开时能够实现 100% 完整的 Agent 会话与剪辑方案还原。*
+*注：内存常驻的 `TimelineMemoryIndex`（包含时序声学物理锚点、分幕缓存与负样本指纹，详见 agent-director-spec.md 第 2.4 节）在落盘时将其语义分段摘要与负样本切点签名沉淀映射至 `AgentProjectSession`（`cached_outline` 与 `rejected_cut_hashes`），确保工程重开时零 Token 损耗还原记忆上下文。该字段随 `Project` 一并序列化至 `.clipflow` 容器内部，经 Zstandard 压缩存储，体积增加小于 15KB，但在异机迁移和重新打开时能够实现 100% 完整的 Agent 会话与剪辑方案还原。*
 
 
 ---
