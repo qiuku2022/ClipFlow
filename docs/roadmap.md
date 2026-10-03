@@ -403,9 +403,10 @@ flowchart TD
   - **前置依赖**：M4-T01
   - **涉改模块**：`crates/clipflow-app/`
   - **对应规范**：[agent-director-spec.md 第 1-2 节](agent-director-spec.md) & [security-and-privacy.md 第 6 节](security-and-privacy.md)
-  - **核心交付物**：构建常驻内存的 `TimelineMemoryIndex`（声学时序锚点 + 章节缓存 + 历史拒绝特征指纹），支持 Agent 局部只读按需召回，Token 预算降低 $\ge 65\%$；实现 Master Director 宏观大纲解析与 `IntentRouter` 意图解构，并行分发调度 `PacingCutter`（气口剪除）、`PackagingPlanner`（动效包装）与 `AudioPlanner`（BGM 避让）3 大专职子规划器并合成全局方案；构建带 `<untrusted_audio_transcript>` 定界标签与对抗注入扫描的导演提示词工程；实现 `LlmGovernor` 三级容灾状态机（重试 $\to$ 模型降级链 $\to$ 本地纯声学物理粗剪兜底）；LLM API Key 通过 Windows DPAPI（`CryptProtectData`）加密存储至 `%LOCALAPPDATA%\ClipFlow\config\credentials.bin`。
+  - **核心交付物**：构建常驻内存的 `TimelineMemoryIndex`（声学时序锚点 + 章节缓存 + 历史拒绝特征指纹），支持 Agent 局部只读按需召回，Token 预算降低 $\ge 65\%$；构建统一 `LlmClient` Trait 抽象与双协议驱动（`OpenAiDriver` 与 `AnthropicDriver`，支持 MiniMax-M3.x / Claude / DeepSeek 及本地 Ollama）；实现 Master Director 宏观大纲解析与 `IntentRouter` 意图解构，并行分发调度 `PacingCutter`（气口剪除）、`PackagingPlanner`（动效包装）与 `AudioPlanner`（BGM 避让）3 大专职子规划器并合成全局方案；构建带 `<untrusted_audio_transcript>` 定界标签与对抗注入扫描的导演提示词工程；实现 `LlmGovernor` 三级容灾状态机（重试 $\to$ 模型降级链 $\to$ 本地纯声学物理粗剪兜底）；LLM API Key 通过 Windows DPAPI（`CryptProtectData`）加密存储至 `%LOCALAPPDATA%\ClipFlow\config\credentials.bin`。
   - **验收命令 (DoD)**：
     ```bash
+    cargo test -p clipflow-app --test llm_client_protocol_test
     cargo test -p clipflow-app --test timeline_memory_index_test
     cargo test -p clipflow-app --test llm_director_intent_router_test
     cargo test -p clipflow-app --test llm_governor_fallback_test

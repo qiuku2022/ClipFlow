@@ -78,14 +78,23 @@ flowchart TD
 ### 2.1 大模型配置、Token 预算与容灾存储
 
 ClipFlow 支持本地大模型与主流云端 API，统一在主进程安全配置中心管理：
-- **兼容协议**：标准 OpenAI Chat Completions 协议（兼容 DeepSeek-V3/R1、Claude 3.5 Sonnet、OpenAI GPT-4o 及本地 Ollama / vLLM）。
+- **双协议适配架构**：Rust 宿主集成统一客户端抽象（`LlmClient` Trait），底层通过驱动适配两大主流 API 格式：
+  1. **`LlmProtocol::OpenAi`**：标准 Chat Completions 协议（兼容 DeepSeek-V3/R1、GPT-4o 及本地 Ollama / vLLM）；
+  2. **`LlmProtocol::Anthropic`**：Anthropic Messages 协议（兼容 Claude 3.5/3.7 系列以及 MiniMax-M3.x 系列 `/anthropic/v1/messages` 原生端点）。
 - **字段规范与 Token 预算**：
   ```rust
+  #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+  pub enum LlmProtocol {
+      OpenAi,
+      Anthropic,
+  }
+
   pub struct LlmProviderConfig {
-      pub provider_id: String,     // 如 "deepseek", "openai", "local-ollama"
-      pub base_url: String,        // 如 "https://api.deepseek.com/v1"
+      pub provider_id: String,     // 如 "deepseek", "openai", "minimax", "local-ollama"
+      pub protocol: LlmProtocol,   // 协议类型驱动选择
+      pub base_url: String,        // 如 "https://api.deepseek.com/v1" 或 "https://api.minimax.cn"
       pub api_key: Option<String>, // DPAPI 加密存储于 Windows 凭据管理器
-      pub model_name: String,      // 如 "deepseek-chat", "gpt-4o"
+      pub model_name: String,      // 如 "deepseek-chat", "MiniMax-M3.1-Flash-Preview"
       pub max_prompt_tokens: u32,  // 输入 Token 上限预算（如 16,384），输入前由本地 Tokenizer 预检阻断超限
       pub max_completion_tokens: u32, // 输出 Token 上限预算（如 4,096）
       pub temperature: f32,        // 剪辑规划建议 0.2 ~ 0.4（兼顾创造性与指令稳定性）
@@ -93,6 +102,10 @@ ClipFlow 支持本地大模型与主流云端 API，统一在主进程安全配�
       pub fallback_model_name: Option<String>, // 二级降级备用模型（如 "deepseek-chat" -> "local-ollama"）
   }
   ```
+- **Anthropic / MiniMax 适配契约**：
+  1. **鉴权头适配**：支持标准 Bearer Token（MiniMax 规范：`Authorization: Bearer <KEY>`）与原生 `x-api-key`；
+  2. **工具格式映射**：统一 Tool 定义自动映射为 Anthropic 原生 `input_schema`；
+  3. **思考链连续性保障**：对接 MiniMax-M3.x / Claude Thinking 模式时，多轮 Tool Calling 交互强制将历史响应中的 `thinking` 内容块原样回传，严禁丢弃。
 - **Token 预算与超限防御契约**：在文本送入大模型前，主进程必须调用轻量本地分词器（基于 `tiktoken-rs`）预估 Prompt 长度。若超出 `max_prompt_tokens`，强制触发宏微两级分幕切片（Hierarchical Chunking），严禁静默发送导致 API 拒绝报错。
 
 
