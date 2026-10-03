@@ -11,25 +11,36 @@
 
 不同于传统剪辑软件中仅作为侧边栏聊天助手的“单点 AI”，ClipFlow 的 Agent 承担**总导演 (Director)** 角色：
 1. **全局内容理解**：解析原始长素材的语音大纲、情绪起伏、无效停顿与主题脉络。
-2. **结构化剪辑方案输出**：自主制定包含钩子开头（Hook）、节奏卡点、BGM 选型与动效包装的完整《导演剪辑方案》。
-3. **驱动时间轴原子落地**：通过类型安全、可撤销的剪辑指令集，一键将方案编译铺设至全局公用时间线。
+2. **两级意图解构与专项规划**：Master Director 解析宏观叙事意图并生成章节大纲，通过 Intent Router 调度专职子规划模块（口播剪除、动效包装、配乐避让）分别求解。
+3. **驱动时间轴原子落地**：通过类型安全、可撤销的剪辑指令集与分阶段执行图（Execution DAG），一键将方案编译铺设至全局公用时间线。
 
 ```mermaid
 flowchart TD
-    subgraph Raw_Perception ["多模态感知输入"]
+    subgraph Raw_Perception ["多模态感知输入 (本地 Worker & 引擎)"]
         RawVideo["原始长视频素材"]
         ASR_Engine["Python faster-whisper 1.2.1\n(词级时间戳 + 标点断句)"]
         SilenceDetect["FFmpeg 9.0.2 silencedetect\n(气口/能量/停顿分析)"]
-        RawVideo --> ASR_Engine
-        RawVideo --> SilenceDetect
+        MemoryIndex["结构化时序记忆 (TimelineMemoryIndex)\n时序物理锚点 + 章节索引 + 历史拒绝指纹"]
+        RawVideo --> ASR_Engine & SilenceDetect
+        ASR_Engine & SilenceDetect --> MemoryIndex
     end
 
-    subgraph Director_Cognition ["导演大模型认知层 (LLM / Agent Core)"]
-        PromptEngine["导演提示词工程与上下文分段器"]
-        PlanGenerator["剪辑方案规划生成器 (Director Plan)"]
+    subgraph Director_Cognition ["导演大模型认知层 (Rust Host 直接驱动 LLM API)"]
+        MasterDirector["总导演 LLM (Master Director)\n(宏观叙事意图解析 + 章节大纲生成)"]
+        IntentRouter["意图路由器 (Intent Router)"]
         
-        ASR_Engine & SilenceDetect --> PromptEngine
-        PromptEngine --> PlanGenerator
+        subgraph Sub_Planners ["专项子规划器群 (Specialized Prompt / Tools)"]
+            CutterPlanner["PacingCutter: 口播气口/错词剪除"]
+            GraphicPlanner["PackagingPlanner: B-Roll & HyperFrames 模板装配"]
+            AudioPlanner["AudioPlanner: BGM 风格选配 & Ducking 避让"]
+        end
+
+        PlanSynthesizer["方案合成器 (Director Plan Synthesizer)"]
+
+        MemoryIndex -.->|只读感知 query_*| MasterDirector
+        MasterDirector --> IntentRouter
+        IntentRouter --> CutterPlanner & GraphicPlanner & AudioPlanner
+        CutterPlanner & GraphicPlanner & AudioPlanner --> PlanSynthesizer
     end
 
     subgraph User_Approval ["交互审查视窗 (Agent 工作台)"]
@@ -41,9 +52,10 @@ flowchart TD
     end
 
     subgraph Execution_Engine ["执行与防腐层 (Rust Host Engine)"]
-        ToolExecutor["时间轴工具调用解析器 (Tool Calling / ACL)"]
-        TimelineCmds["原子化 TimelineCommand 事务集\n(CompoundCommand)"]
-        ToolExecutor --> TimelineCmds
+        DagCompiler["分阶段执行图编译器 (Staged DAG Compiler)"]
+        AclGateway["时间轴防腐网关 (AgentTimelineAcl)\nRationalTime 强制帧吸附 & 隙缝缝合"]
+        CompoundTx["原子化 CompoundCommand 事务"]
+        DagCompiler --> AclGateway --> CompoundTx
     end
 
     subgraph Native_Timeline ["Rust 全局公用时间线 (SSOT)"]
@@ -51,12 +63,12 @@ flowchart TD
         GhostLayer["Ghost Layer 虚拟投影层 (半透明高亮)"]
     end
 
-    PlanGenerator --> PlanView
-    PlanGenerator -.->|虚拟高亮差分投影| GhostLayer
-    Native_Timeline -.->|timeline_query_* 只读状态感知| PromptEngine
-    ApproveBtn --> ToolExecutor
-    TimelineCmds --> Tracks
-    ToolExecutor -.->|ToolResult 结构化报错回灌 (自愈重试)| PromptEngine
+    PlanSynthesizer --> PlanView
+    PlanSynthesizer -.->|虚拟高亮差分投影| GhostLayer
+    Native_Timeline -.->|timeline_query_* 只读状态感知| MasterDirector
+    ApproveBtn --> DagCompiler
+    CompoundTx --> Tracks
+    DagCompiler -.->|Reflection 结构化反思回环 (自愈重试)| MasterDirector
 ```
 
 ---
@@ -86,14 +98,16 @@ ClipFlow 支持本地大模型与主流云端 API，统一在主进程安全配�
 
 ### 2.2 超长视频分幕分块策略 (Context Chunking)
 
-面对时长 30~120 分钟的口播长视频，Whisper 产出的词级转写文本往往包含数万字，超出单次请求的最优认知窗口。系统采用**两级层次化调度**：
+面对时长 30~120 分钟的口播长视频，Whisper 产出的词级转写文本往往包含数万字，超出单次请求的最优认知窗口。系统采用**两级层次化调度 + 记忆索引按需召回**：
 
-1. **第一级：宏观分幕 (Macro Act Segmentation)**：
-   - 提取全局文本中每隔 2~3 分钟的粗粒度摘要，构建《全局故事弧线索引》。
-   - 识别视频整体结构：片头（Hook/引入）$\to$ 核心观点 1/2/3 $\to$ 案例佐证 $\to$ 结尾总结与行动呼吁（CTA）。
-2. **第二级：微观切片 (Micro Section Processing)**：
-   - 以自然段落（长停顿或语意转折）为边界切分子任务，分批并发/异步调用 LLM 识别细粒度口误、语气词及冗余车轱辘话。
-3. **合成全局方案**：汇总各切片结果，输出统一的《导演剪辑方案 (Director Plan)》。
+1. **第一级：宏观分幕与意图拆解 (Macro Act & Intent Segmentation)**：
+   - Master Director 仅读取压缩后的章节摘要，构建《全局故事弧线索引》；
+   - 识别视频整体结构：片头（Hook/引入）$\to$ 核心观点 1/2/3 $\to$ 案例佐证 $\to$ 结尾总结与行动呼吁（CTA）；
+   - 输出各章节的剪辑意图标签（如 `PacingStyle::FastPaced`, `RequiresBroll`, `NeedsEmphasis`）。
+2. **第二级：微观切片与专项子规划 (Micro Section & Specialized Planning)**：
+   - Intent Router 将章节任务分发给轻量 Sub-Planners（`PacingCutter`, `PackagingPlanner`, `AudioPlanner`）；
+   - 子规划器仅接收当前 2~3 分钟切片的局部上下文，结合本地时序物理锚点并发求解，规避巨型 Prompt 导致的截断与幻觉。
+3. **合成全局方案**：Rust 宿主方案合成器汇总各切片结果，输出统一的《导演剪辑方案 (Director Plan)》。
 
 ### 2.3 流式分幕推流与时间线抢跑预标机制 (Progressive Streaming & Anti-Latency)
 
@@ -107,6 +121,56 @@ ClipFlow 支持本地大模型与主流云端 API，统一在主进程安全配�
    - 时间线上对应的段落瞬间由淡黄色升格为鲜红色的确凿切除标记，剧本大纲与卡片瀑布流实时动态生长，用户无需等待全片规划完毕即可立即开始预览或确认已就绪的前序片段。
 3. **分幕级局部重试与容灾 (Sectional Failover)**：
    - 若某一段长口播的 LLM 请求因网络波动中断，系统仅对该微观切片发起局部重试，已成功生成的其他幕卡片毫秒级持久化保留，杜绝长流程全盘推倒重来。
+
+### 2.4 结构化时序记忆模型与感知索引 (Structured Timeline Memory Index)
+
+为避免每次会话都向大模型重传完整转写并支持跨多轮交互的上下文追踪，主进程构建基于内存的**结构化时序记忆索引 (`TimelineMemoryIndex`)**（持久化时映射至 `timeline-data-model.md` 中的 `AgentProjectSession`）：
+
+```rust
+use std::collections::HashSet;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// 时间轴多模态感知记忆索引（Rust 宿主常驻，支撑 Agent 局部只读查询）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TimelineMemoryIndex {
+    /// 媒体资产关联 ID
+    pub asset_id: Uuid,
+    /// 1. 时序物理声学锚点（停顿、极低能量谷值、爆发音点）
+    pub acoustic_anchors: Vec<AcousticAnchor>,
+    /// 2. 章节语义索引缓存（用于 Master Director 宏观大纲定位）
+    pub semantic_chapters: Vec<SemanticChapterSummary>,
+    /// 3. 用户历史拒绝切除片段特征指纹集合（负样本防逆向推荐）
+    pub rejected_cut_hashes: HashSet<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AcousticAnchor {
+    pub anchor_id: Uuid,
+    pub source_start_seconds: f64,
+    pub source_end_seconds: f64,
+    pub kind: AcousticAnchorKind,
+    pub energy_level_db: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AcousticAnchorKind {
+    SilenceGap,     // 物理气口/静音
+    BreathPause,    // 换气轻声停顿
+    EnergySpike,    // 音量重音高潮点（用于卡点）
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SemanticChapterSummary {
+    pub chapter_index: u32,
+    pub headline: String,
+    pub source_time_range: (f64, f64),
+    pub key_takeaways: Vec<String>,
+    pub token_estimate: u32,
+}
+```
+
+- **感知查询解耦契约**：大模型无需在 Prompt 中硬背全量台词，而是通过只读工具（`timeline_query_range`, `timeline_query_cut_candidates`）根据时间区间向记忆索引下发细粒度投影请求，Prompt Token 预算降幅超过 **$65\%$**。
 
 ---
 
@@ -323,32 +387,72 @@ Agent 操作公用时间线时，必须且仅能通过以下结构化工具调�
 
 ---
 
-### 3.3 工具执行回环与自愈机制 (Tool-Result & Self-Healing Protocol)
+### 3.3 分阶段执行图 (Staged Execution DAG) 与结构化反思回环 (Reflection Protocol)
 
-现行非编交互中，用户在与 Agent 交互期间可能在时间线上随时进行手动移动、加锁或剪切。若工具执行发生偏差，系统通过 **Tool-Result 回环协议** 将执行层状态精准回传大模型，避免单次执行失败导致整个剪辑方案作废：
+现行非编剪辑中，波纹剪切（Ripple Delete）会导致下游所有素材的时间轴坐标向左发生坍缩。若将“波纹切除”与“在 05:20 插入 B-Roll / 挂载动效”作为平级无序指令下发，前序波纹执行完毕后，05:20 处的画面台词已经完全错位。
+
+为保证指令执行的严格数学确定性，系统引入**分阶段执行图 (Staged Execution DAG)** 与 **时间坐标重映射 (Coordinate Translation)**，并在冲突时启动结构化反思自愈：
 
 ```mermaid
 sequenceDiagram
-    participant LLM as Agent 认知层
-    participant Host as Rust 宿主执行引擎
+    participant LLM as Master / Sub-Planners (认知层)
+    participant Host as Rust Staged DAG 编译器
+    participant ACL as AgentTimelineAcl (防腐网关)
     participant TL as 时间轴状态机 (SSOT)
     participant UI as 创作者界面
 
-    LLM->>Host: 下发工具调用 (Tool Call)
-    Host->>TL: 预检与执行 (Pre-check & Execute)
-    alt 执行成功 (Success)
-        TL-->>Host: 产生 CompoundCommand 事务
-        Host-->>LLM: 回传 ToolResult (Success, 影响区间, 新生成 clip_id)
-        Host->>UI: 渲染时间线高亮/更新卡片
-    else 结构化报错 (Recoverable Error)
-        TL-->>Host: 拦截异常 (如 ERR_CLIP_EXPIRED)
-        Host-->>LLM: 回传 ToolResult (Error Payload, 最新有效上下文)
-        Note over LLM: 触发自愈重试 (最多 2 次)
-        LLM->>Host: 修正参数后重发 Tool Call
-    else 致命冲突 (Unrecoverable Error)
-        Host->>UI: 弹出单点冲突卡片 (锁定轨道/严重越界)，交由用户裁决
+    LLM->>Host: 下发 DirectorPlan 方案
+    Host->>UI: 渲染时间线半透明 Ghost Layer 虚拟投影
+    Note over UI: 用户点击【★ 一键采纳并应用到时间轴】
+    UI->>Host: 确认落地
+    
+    rect rgb(20, 25, 35)
+        Note over Host: Stage 1 (波纹减法): 执行 timeline_batch_cut_and_ripple
+        Host->>ACL: 批量送入剪切区间 (源时间尺自后向前折叠)
+        ACL->>TL: 应用切除并记录源/轴位移映射表 (TimeMapping)
+    end
+
+    rect rgb(25, 30, 45)
+        Note over Host: Stage 2 (坐标重映射): 依据 TimeMapping 自动换算后续增量坐标
+        Note over Host: Stage 3 (视觉增量): 挂载 B-Roll 与 HyperFrames 动效
+        Host->>ACL: 换算后坐标下发 timeline_insert_broll & attach_hyperframes
+        ACL->>TL: 写入 V2/FX 轨道
+    end
+
+    rect rgb(20, 35, 30)
+        Note over Host: Stage 4 (声音增量): 铺设 BGM 与 Ducking 降音
+        Host->>ACL: 下发 timeline_configure_bgm
+        ACL->>TL: 写入 A2 轨道
+    end
+
+    alt 全部 Stage 顺利完成
+        TL-->>Host: 打包为单一原子事务 (CompoundCommand)
+        Host-->>UI: 落地生效，支持单次 Ctrl+Z 整体撤销
+    else 遇到局部偏差 (Recoverable Error, 如 ErrClipExpired)
+        TL-->>Host: 拦截异常并回传最新区间
+        Host->>LLM: 局部微调参数重试 (最多 2 次)
+    else 遇到结构性碰撞冲突 (Unrecoverable Error, 如 ErrTrackLocked)
+        TL-->>Host: 拦截冲突
+        Host->>LLM: 打包 Reflection Payload (当前半成品状态 + 冲突详情)
+        Note over LLM: 仅重编排受影响的下游子图，自愈恢复
     end
 ```
+
+#### 4 阶段流水线编译契约 (Staged Compilation Pipeline)
+1. **Stage 1 (减法阶段 - Subtractive Cut & Ripple)**：
+   - 提取 `DirectorPlan.suggested_cuts` 中用户勾选采纳的切点；
+   - 严格按照源时间戳从后向前倒序执行切除折叠，或在原始源切片内部执行分割；
+   - 保证前序波纹绝不影响未切片段在源素材中的物理索引。
+2. **Stage 2 (坐标重映射 - Coordinate Translation)**：
+   - Rust 宿主计算切除前后的时间映射函数：
+     $$\text{TimeMapping}: t_{\text{source}} \mapsto t_{\text{timeline\_new}}$$
+   - 将方案中所有基于源时间标记的 B-Roll 入点、HyperFrames 动效起点自动换算为折叠后的时间线新坐标。
+3. **Stage 3 (视觉增量阶段 - Additive Video & Motion)**：
+   - 在已折叠的干净时间线上，安全插入 V2 轨 B-Roll 素材与 FX 轨 HyperFrames 包装。
+4. **Stage 4 (声音增量阶段 - Additive Audio & Ducking)**：
+   - 铺设 A2 轨配乐，并根据主讲人声区间自动生成 Ducking 动态包络。
+5. **原子提交 (Atomic Commit)**：
+   - 上述 4 个阶段的所有原子子命令统一归集为一个 `CompoundCommand`，一次性压入 `TimelineHistory` 撤销栈，用户在非编主界面按一次 `Ctrl + Z` 即可完全复原。
 
 #### 结构化执行结果载荷：`ToolExecutionResult`
 ```rust
@@ -386,23 +490,25 @@ pub enum ToolErrorCode {
 }
 ```
 
-- **两轮自愈兜底机制 (2-Turn Auto-Healing)**：
-  1. 当遇到 `ErrClipExpired` 或 `ErrTimeOutOfBounds` 这类轻微偏差时，Rust 宿主将错误详情与当前真实的切片 ID 及最新区间以 `tool-result` 格式送回大模型上下文，模型自动自愈校正参数并发起二次调用；
-  2. 若连续 2 次重试仍未成功，中断自愈，前端工作台弹出醒目的琥珀色提示条，标明“该建议片段位置发生变动，请人工确认”，杜绝死循环消耗 API 配额。
-
+- **两级自愈与反思机制 (2-Tier Self-Healing & Reflection)**：
+  1. **Tier 1: 轻微偏移局部自愈 (Local Auto-Healing)**：
+     当遇到 `ErrClipExpired` 或 `ErrTimeOutOfBounds` 这类局部轻微偏差时，Rust 宿主将错误详情与当前真实切片 ID 及最新区间以 `tool-result` 格式送回模型上下文，模型自动校正参数重发（最多 2 轮）。
+  2. **Tier 2: 结构冲突反思重编排 (Textual Reflection Re-Planning)**：
+     若遇到轨道锁死（`ErrTrackLocked`）或严重元素碰撞（`ErrCollisionOverlap`），宿主不直接全盘失败，而是将前序已成功 Stage 的状态与失败节点的诊断信息封装为 `ReflectionPayload`，打回 Master Director，由大模型针对受影响的特定下游阶段生成替代执行子图（例如将冲突的 B-Roll 改为平铺至上层空闲轨道 V3）。若重试仍失败，则弹出琥珀色提示条交由人类创作者决策。
 
 ---
 
 ## 4. 导演剪辑方案数据结构 (Director Plan Schema)
 
-Agent 思考规划后，在落地前向前端展示完整的结构化方案对象：
+Agent 思考规划后，在落地前向前端展示完整的结构化方案对象。
+
+> **时间戳标尺契约**：  
+> `DirectorPlan` 为前端可视化卡片展示与 LLM 交互视图。为杜绝波纹剪切带来的时间歧义，方案中的所有时间参数（`start`, `end`, `source_time_seconds`）统一声明为**源素材原始时间标尺 (Source Media Timecode)**。当创作者在 UI 点击【★ 一键采纳】时，底层由 Rust 端 Staged DAG 编译器结合 `TimeMapping` 换算为纯整数 `RationalTime` 执行。
 
 ```rust
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-// 注：DirectorPlan 为前端可视化卡片展示与 LLM 协议交互视图（暴露 f64 便于前端高精度渲染进度与人类阅读）。
-// 当创作者在 UI 点击“确认应用建议”时，底层通过 AgentTimelineAcl 转换为纯整数 RationalTime 事务命令执行。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DirectorPlan {
     pub plan_id: Uuid,
@@ -424,6 +530,7 @@ pub struct DirectorPlan {
 pub struct PlanChapter {
     pub chapter_index: u32,
     pub headline: String,
+    /// 对应源素材时间区间 (秒)
     pub original_time_range: (f64, f64),
     pub key_takeaways: Vec<String>,
     pub rhythm_style: RhythmStyle, // FastPaced, Steady, Climax
@@ -433,11 +540,15 @@ pub struct PlanChapter {
 pub struct SuggestedCut {
     pub cut_id: Uuid,
     pub cut_type: CutType, // Silence, FillerWord, Repetition, OffTopic
+    /// 源素材起始秒数
     pub start: f64,
+    /// 源素材结束秒数
     pub end: f64,
     pub transcript_excerpt: Option<String>,
     pub confidence: f32,   // 0.0 - 1.0 置信度
     pub approved_by_default: bool,
+    /// 关联的源片段 ID（可选）
+    pub source_clip_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -476,10 +587,12 @@ pub enum CutType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SuggestedGraphic {
     pub graphic_id: Uuid,
+    /// 关联的章节索引
+    pub anchor_chapter_index: Option<u32>,
     /// 动效模板标识（如 "lower_third_tech", "data_line_chart"）
     pub template_id: String,
-    /// 在时间轴上的起始秒数 (f64)
-    pub timeline_start_seconds: f64,
+    /// 在源素材上的对应起始秒数 (f64，经 TimeMapping 换算为时间轴位置)
+    pub source_start_seconds: f64,
     /// 持续时长秒数 (f64)
     pub duration_seconds: f64,
     /// 模板注入参数（文本内容、高亮配色、数值等）
@@ -518,7 +631,7 @@ pub struct SuggestedAudioPlan {
 
 ```
 +----------------------------------------------------------------------------------------------------+
-| 顶栏: 导演 Agent 模式: [ 深度口播精剪模式 v1.0 ] | 当前模型: [ deepseek-chat (INT8) ] | 运行状态: [ 就绪 ] |
+| 顶栏: 导演模式: [ 深度口播精剪 v1.0 ] | 引擎: [ deepseek-chat ] | 阶段: [ 意图解构 -> 方案生成 -> 虚拟投影就绪 ] |
 +------------------------------------+------------------------------------+--------------------------+
 | 【左栏: 剧本大纲与镜头清单】         | 【中栏: 导演对话与交互决策流】       | 【右栏: 方案对比与成片指标】 |
 |                                    |                                    |                          |
@@ -528,15 +641,15 @@ pub struct SuggestedAudioPlan {
 |                                    | 用户: "把第二段关于架构的废话再精简 | 待处理废话: 18 处        |
 | 2. 核心架构深度拆解 [00:25-05:12]   | 一点，保留最核心的三点。"           |                          |
 |    - 模块 1: Rust 主进程            |                                    | [ 预览精简音频 ]         |
-|    - 模块 2: Python ASR 子进程      | AI: "明白！已为您重新压缩该段，剔除 |                          |
-|                                    | 了 45 秒重复论述，方案已更新。"    | [ ★ 一键采纳并应用到时间轴 ]|
+|    - 模块 2: Python ASR 子进程      | AI: "明白！已重新分解意图并调度     |                          |
+|                                    | PacingCutter，方案已更新。"        | [ ★ 一键采纳并应用到时间轴 ]|
 | 3. 结尾行动呼吁 (CTA) [05:12-06:00] |                                    |                          |
 +------------------------------------+------------------------------------+--------------------------+
-| 【全局公用时间线联动区】: 方案中的待剪除区间在时间线上实时以红底（#2B1214）高亮标注，确认后瞬间波纹折叠 |
+| 【全局公用时间线联动区】: 方案中的待剪除区间实时以红底（#2B1214）半透明 Ghost Layer 投影，确认后秒级波纹折叠 |
 +----------------------------------------------------------------------------------------------------+
 ```
 
 ### 5.1 交互核心特性
 - **时间线实时投影 (Timeline Projection)**：Agent 处于思考与方案输出阶段时，不破坏原始时间轴，而是以“虚拟图层（Ghost Layer）”形式在公用时间线上红显待剪除区间、紫显建议动效。
 - **对话即修改 (Chat-driven Refinement)**：用户只需在中间对话框输入自然语言（例如“不要删那句强调安全的说明”），Agent 自动更新 `DirectorPlan` 中对应片段的 `approved_by_default` 标记。
-- **一键原子落地 (Atomic Dispatch)**：点击“一键采纳”后，主进程生成单个 `CompoundCommand` 执行时间轴折叠，毫秒级就绪，且用户随时可在【剪辑】页按 `Ctrl + Z` 完全撤销。
+- **一键原子落地 (Atomic Staged Dispatch)**：点击“一键采纳”后，主进程 Staged DAG 编译器依次执行波纹折叠、坐标重映射与图层挂载，最终打包为单个 `CompoundCommand` 落地，耗时毫秒级，且用户随时可在【剪辑】页按 `Ctrl + Z` 一键全盘撤销。
