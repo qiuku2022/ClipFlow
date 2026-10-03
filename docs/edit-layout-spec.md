@@ -9,81 +9,17 @@
 
 ## 1. 整体网格拓扑与分区总览
 
-界面完全对齐 Premiere Pro 经典工业级剪辑工作台格局，采用**“上半屏三区分屏 + 下半屏 100% 满宽常驻时间线”**的稳固两层拓扑，彻底杜绝切页时的容器尺寸跳变与 egui 布局颠簸。
+界面完全对齐 Premiere Pro 经典工业级剪辑工作台格局，采用**“核心三列（左/中/右）与上下视窗分布”**的稳固拓扑，彻底杜绝切页时的容器尺寸跳变与 egui 布局颠簸。
 
-### 1.1 网格拓扑与层级架构图 (Grid Topology Diagram)
+### 1.1 网格拓扑与层级分布
 
-```mermaid
-flowchart TD
-    subgraph Window ["ClipFlow 桌面主窗口 (Neutral Modern Dark: #0F1115 底板, 12px/8px 圆角梯队)"]
-        subgraph TopBar ["顶栏 Menu & Workspace Bar (高度 36px, #1E222B)"]
-            Menu["菜单栏: File / Edit / Clip / Sequence"] --- SeqName["序列: 002 中东#1 (1080p 60fps)"] --- LayoutSwitch["工作区布局: 默认剪辑台"]
-        end
+- **左侧列 (约 32% 宽)**：分为上半部【Source 源监视器】与下半部【Project 媒体库/素材池】。
+- **中间列 (约 48% 宽)**：分为上半部【Program 主合成监视器】与下半部【Timeline 多轨时间轴】及侧边工具栏。
+- **右侧列 (约 20% 宽)**：全高度贯通的属性边栏，承载【Properties 检查器】与【Effect Controls 效果控件】。
 
-        subgraph UpperZone ["上半屏：三区分屏工作区 (占比 58% 视口高度, #171A21)"]
-            subgraph Zone1 ["1. 素材池与效果 (占比 25%)"]
-                BinTab["Project Bin (素材缩略图)"]
-                EffectTab["Effect Controls (参数/关键帧)"]
-            end
-            subgraph Zone2 ["2. 双联监视器视窗 (占比 50%)"]
-                SourceMon["源监视器 (Source Monitor)"]
-                ProgramMon["节目监视器 (Program Monitor)"]
-            end
-            subgraph Zone3 ["3. 属性与主输出电平 (占比 25%)"]
-                Properties["属性检查器 (Inspector)"]
-                MasterMeter["Master 立体声 VU 电平表"]
-            end
-        end
+### 1.2 界面布局参考图 (Reference Layout)
 
-        Splitter["水平可拖拽分割条 (2px solid #2A2F3A)"]
-
-        subgraph LowerZone ["下半屏：全局公用时间线 (占比 42% 视口高度, 跨页绝对常驻)"]
-            subgraph ToolsCol ["工具条 (32px)"]
-                ToolBtns["选择 V / 剃刀 C / 波纹 B / 滑移 Y"]
-            end
-            subgraph TimelineZone ["多轨时间轴矩阵 (#0F1115 轨道槽, #2F6FEB 播放指针)"]
-                Ruler["时间码标尺 (反向五边形游标头 + 1.5px 纵向对齐线)"]
-                C1["C1 字幕轨 (#271F12 暗金 / #63471C 描边)"]
-                V2["V2 动效轨 HyperFrames (#22142D 深曜紫)"]
-                V1["V1 视频主轨 (#151E2E 沉稳蓝 / #2B4570 描边)"]
-                A1["A1 口播主音频 (#122119 暗墨绿 + #17A34A 实时双色波形)"]
-                A2["A2 背景配乐 BGM (#122119 暗墨绿)"]
-            end
-        end
-
-        subgraph BottomDock ["底部达芬奇式 Dock 栏 (高度 48px, #1E222B 底板, 顶部 1px #2A2F3A)"]
-            DockAgent["[ AGENT ]"] --- DockEdit["【 剪辑 (EDIT) ★ #2F6FEB 激活 】"] --- DockMotion["[ 动画 (MOTION) ]"] --- DockAudio["[ 声音 (AUDIO) ]"] --- DockImage["[ 图片 (IMAGE) ]"] --- DockDeliver["[ 导出 (DELIVER) ]"]
-        end
-    end
-
-    TopBar --> UpperZone
-    UpperZone --> Splitter
-    Splitter --> LowerZone
-    LowerZone --> BottomDock
-```
-
-### 1.2 字符级线框排版图 (ASCII Wireframe)
-
-```
-+----------------------------------------------------------------------------------------------------+
-| 顶栏 Menu & Workspace Bar: File / Edit / Clip / Sequence ... | 序列名称: [002 中东#1] | 布局切换器 |
-+-----------------------------+---------------------------------------+------------------------------+
-| 1. 项目素材与效果控件 (25%) | 2. 监视器双联视窗 (50%)               | 3. 多功能属性与主电平表 (25%)|
-|    [Project Bin | Effect]   |    [Source Mon] | [Program Mon]      |    - Properties / 预设库     |
-|    - 树状素材分类/缩略图    |    - 素材预览   | - 成片合成实时画面 |    - 视频/音频属性调整       |
-|    - 运动/缩放关键帧参数    |    - 走带控制   | - 安全框 / 截帧    |    - 纵向主输出立体声电平表  |
-+-----------------------------+---------------------------------------+------------------------------+
-| 可拖拽水平分割条 (Splitter) - 1px solid #2A2F3A                                                    |
-+----------------------------------------------------------------------------------------------------+
-| 4. 工具栏 (32px) + 全局公用时间线 (Global Shared Timeline) 【下半屏 100% 满宽常驻底座】             |
-|    - [Tools 竖条] | - C1 字幕轨 (faster-whisper 转写词级时间戳)                                    |
-|    - [V1-V3 轨]   | - 视频切片 / B-Roll 覆盖 / HyperFrames 动态 Web 包装角标                       |
-|    - [A1-A3 轨]   | - 口播人声音频 / 背景配乐 (BGM) / 音效环境 (SFX)                               |
-|    - [时间码标尺] | - 支持高精度滚轮缩放、磁吸 (Snap)、帧网格吸附与波纹剪辑                        |
-+----------------------------------------------------------------------------------------------------+
-| 底部 Dock: [ Agent ] | 【剪辑】 | [ 动画 ] | [ 声音 ] | [ 图片 ] | [ 导出 ] (高度 48px, 12px 容器圆角 / 8px 控件) |
-+----------------------------------------------------------------------------------------------------+
-```
+![剪辑工作台界面布局规范](assets/layout-diagram.png)
 
 ---
 
