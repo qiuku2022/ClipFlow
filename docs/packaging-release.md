@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98, Python 3.13, Node.js 24 LTS, FFmpeg 9.0.2, NSIS, signtool  
+> **适用技术栈**：Rust 1.99, Python 3.13, Node.js 24 LTS, FFmpeg 9.0.2, NSIS, signtool  
 > **核心地位**：规范 Windows 端复合多运行时目录布局、分级安装包（Lite/Full）编排、NSIS 打包脚本、代码签名与静默热更新机制。
 
 ---

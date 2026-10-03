@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98 (Host), Python 3.13 (`uv`), Node.js 24 LTS, Win32 Named Pipes, JSON-RPC 2.0  
+> **适用技术栈**：Rust 1.99 (Host), Python 3.13 (`uv`), Node.js 24 LTS, Win32 Named Pipes, JSON-RPC 2.0  
 > **核心地位**：规范主进程与 Python 计算子进程、Node.js 动效渲染子进程之间的生命周期管控、管道通信契约、心跳租约与三级容灾自愈协议。
 
 ---

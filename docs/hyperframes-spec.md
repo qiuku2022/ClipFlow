@@ -2,8 +2,8 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Node.js 24 LTS, Headless Chromium (CDP / Playwright Core), GSAP 3.12, Rust 1.98  
-> **核心地位**：定义 ClipFlow“代码化动态包装”标准——基于 Web 技术栈（HTML/CSS/JS/GSAP）构建 Agent 友好、逐帧确定性渲染的透明通道动态图层，并无缝合成至时间轴。
+> **适用技术栈**：Node.js 24 LTS, Headless Chromium (CDP / Playwright Core), Anime.js v4.5 (MIT), Rust 1.99  
+> **核心地位**：定义 ClipFlow“代码化动态包装”标准——基于 Web 技术栈（HTML/CSS/JS/Anime.js）构建 Agent 友好、逐帧确定性渲染的透明通道动态图层，并无缝合成至时间轴。
 
 ---
 
@@ -13,7 +13,7 @@ HyperFrames 继承 Agent-Native 设计哲学：让 AI 导演与人类用户均�
 
 ```mermaid
 flowchart TD
-    subgraph Rust_Host ["Rust 1.98 宿主主进程 (clipflow-media / clipflow-ipc)"]
+    subgraph Rust_Host ["Rust 1.99 宿主主进程 (clipflow-media / clipflow-ipc)"]
         TimelineCore["时间轴动效轨道 (FX Tracks)"]
         FrameLedger["帧级完成状态账本 (FrameLedger)"]
         SharedMemConsumer["共享内存读取器 (SharedMemConsumer)"]
@@ -42,11 +42,11 @@ flowchart TD
         WorkerA --> MemoryGov
     end
 
-    subgraph Web_Template ["动效模板页面 (HTML/CSS/GSAP)"]
+    subgraph Web_Template ["动效模板页面 (HTML/CSS/Anime.js)"]
         DOM["HTML/SVG DOM 结构"]
-        GSAP_Timeline["GSAP 动画时间轴 (.seek(t))"]
+        Anime_Timeline["Anime.js 动画时间轴 (.seek(t))"]
         PureContract["纯函数式求值契约 (Level-1 Pure Analytical)"]
-        DOM & GSAP_Timeline --> PureContract
+        DOM & Anime_Timeline --> PureContract
     end
 
     Watchdog <==>|结构化 IPC 管道| PoolManager
@@ -67,7 +67,7 @@ lower_third_tech/
 ├── manifest.json       # 模板元数据、参数 Schema 与时长规格
 ├── index.html          # HTML 骨架与视口配置
 ├── style.css           # 动效样式 (支持 CSS 变量与主题色)
-├── main.js             # GSAP 驱动脚本与帧求值入口
+├── main.js             # Anime.js v4.5 驱动脚本与帧求值入口 (ESM)
 └── assets/             # 预置字体、SVG 图标或 Lottie JSON
 ```
 
@@ -122,7 +122,51 @@ $$S(t) = \mathcal{F}(t, \vec{P}, \text{Seed})$$
 1. **绝对禁止有状态时间累加器**：严禁在全局或外部闭包作用域声明 `let x += speed * dt` 等依赖前序帧累加的变量；任何位置、透明度、旋转角必须是虚拟时间 $t$（秒）的显式数学映射；
 2. **确定性伪随机数隔离**：严禁使用 `Math.random()`，必须使用种子固化的 PRNG（如 `DeterministicRNG`），且在单帧求值时基于帧序号重置随机种子；
 3. **Canvas / WebGL 纯函数重绘**：Canvas 与 WebGL 每一帧入口必须显式清屏（`ctx.clearRect`），完全基于当前 $t$ 全量重绘，杜绝图层历史像素残留；
-4. **静态 AST 扫描合规拦截**：模板载入与大模型生成代码时，自动运行 `TemplateValidator`，检测并拦截访问原生时钟、`Math.random()` 或非局部累加语句。
+4. **静态 AST 扫描合规拦截**：模板载入与大模型生成代码时，自动运行 `TemplateValidator`，检测并拦截访问原生时钟、`Math.random()` 或非局部累加语句；
+5. **透明基底与视觉通道净化**：模板 `style.css` 必须包含全局强制透明底色（`body, html { background: transparent !important; }`），确保 Alpha 通道不被覆盖；
+6. **字体确定性加载（防首帧文字闪崩）**：禁止依赖外部远程 Web Fonts。所有非系统标准字体，必须转为 WOFF2 Base64 格式直接内联，消除字体网络解析的非确定性时延；
+7. **音效轨剥离禁令**：严禁在模板内包含 `<audio>` 标签或调用 Web Audio API。任何 UI 动效伴随音，必须交由 Rust 宿主通过独立音频轨道（Audio Track）硬同步，维持视频渲染管线的纯粹性。
+
+### 2.3 模板主脚本标准实现范式：`main.js` (Anime.js v4.5 ESM)
+
+所有模板采用原生 ES Module 加载 `Anime.js v4.5`，严禁使用原生时钟自动推进，必须声明 `autoplay: false` 并向全局暴露 `__hyperframes_tl` 逐帧寻址句柄：
+
+```javascript
+// resources/hyperframes_templates/lower_third_tech/main.js
+import { createTimeline, stagger } from '../../vendor/anime.esm.js';
+
+export function setupMotion(params) {
+  // 1. 动态注入参数到 DOM / CSS 变量
+  document.getElementById('primary-text').textContent = params.primary_text;
+  document.getElementById('secondary-text').textContent = params.secondary_text;
+  document.documentElement.style.setProperty('--accent-color', params.accent_color);
+
+  // 2. 构建确定性时间轴 (禁用原生自动推进，完全受控于宿主)
+  const tl = createTimeline({
+    autoplay: false
+  });
+
+  tl.add('.badge-bg', {
+    scaleX: [0, 1],
+    duration: 400,
+    ease: 'outExpo'
+  })
+  .add('.badge-text', {
+    y: [20, 0],
+    opacity: [0, 1],
+    delay: stagger(40),
+    duration: 350,
+    ease: 'outQuad'
+  }, '-=200');
+
+  // 3. 挂载全局逐帧寻址句柄 (供 runtime_shim.js 调度)
+  window.__hyperframes_tl = {
+    seek: (virtualTimeMs) => {
+      tl.seek(virtualTimeMs);
+    }
+  };
+}
+```
 
 ---
 
@@ -154,9 +198,9 @@ $$S(t) = \mathcal{F}(t, \vec{P}, \text{Seed})$$
   window.__clipflow_seek_frame = async (frameIndex, fps) => {
     virtualTimeMs = (frameIndex / fps) * 1000;
     
-    // 驱动 GSAP 时间轴精确跳转
+    // 驱动 Anime.js 时间轴精确跳转 (毫秒)
     if (window.__hyperframes_tl) {
-      window.__hyperframes_tl.seek(virtualTimeMs / 1000, false);
+      window.__hyperframes_tl.seek(virtualTimeMs);
     }
 
     // 触发本帧 RAF 回调
@@ -181,6 +225,7 @@ Node.js 在拉起无头渲染实例时，必须传入严格显存上限与后台
 export const CHROMIUM_LOCKED_FLAGS = [
   '--headless=new',                       // 启用 Chrome 新一代原生无头架构
   '--use-gl=angle',                        // 锁定 Direct3D 11/12 硬件加速后端
+  '--default-background-color=00000000',   // 【核心】强制 Chromium 根背景全透明，防止白底图层覆盖主轨视频
   '--force-gpu-mem-available-mb=512',      // 严格限制 GPU 可用显存池为 512MB，强制 Skia 及时释放冷纹理
   '--gpu-program-cache-size-kb=32768',     // 着色器程序缓存上限锁定为 32MB
   '--disable-gpu-shader-disk-cache',       // 禁用磁盘着色器缓存，避免渲染期磁盘 I/O 抖动
@@ -202,14 +247,15 @@ export const CHROMIUM_LOCKED_FLAGS = [
 
 彻底废除基于 Base64 编码的单帧 CDP 截屏协议，在 Node.js 与 Rust 之间搭建物理内存高速公路：
 1. **三槽位循环共享内存环 (Triple Buffer Ring)**：通过 Win32 API `CreateFileMappingW` 开辟命名共享物理内存（4K 单槽 32MB，总计约 96MB），由 Node 渲染端写入，Rust 宿主直接零拷贝读取；
-2. **原子信号量背压流控**：使用 Windows 原生命名信号量 `Sem_Empty`（初值 3）与 `Sem_Full`（初值 0）刚性协调生产者与消费者，防止丢帧与槽位覆盖；
-3. **单帧直传延迟**：4K 3840x2160 RGBA 单帧物理传输延迟锁定在 **$\le 1.5\text{ms}$**，相较于 Base64 提速 30 倍以上。
+2. **直通透明通道 (Straight Alpha)**：为防止 wgpu 合成时在羽化边缘产生黑边或白锯齿，共享内存中的像素缓冲区强制约定为**非预乘的 Straight RGBA** 格式，Alpha 混合由 Rust 端统一在片元着色器中执行；
+3. **原子信号量背压流控**：使用 Windows 原生命名信号量 `Sem_Empty`（初值 3）与 `Sem_Full`（初值 0）刚性协调生产者与消费者，防止丢帧与槽位覆盖；
+4. **单帧直传延迟**：4K 3840x2160 RGBA 单帧物理传输延迟锁定在 **$\le 1.5\text{ms}$**，相较于 Base64 提速 30 倍以上。
 
 ### 3.5 双 Worker 异步预热乒乓池 (`PingPongPoolManager`)
 
 面向 3000 帧以上的长视频动效母带导出，彻底终结单实例串行重启导致的 170ms~500ms 冷启动黑洞：
 1. **安全分段与前瞻预热**：设定单 Worker 连续求值安全容量为 3000 帧；当当前活跃生产的 Worker A 运行至第 **2700 帧**（提前 300 帧，约 5 秒窗口）时，调度器在后台异步拉起 Worker B；
-2. **后台无感预编译**：Worker B 在独立线程静默加载 HTML、编译 GSAP、加载 Web 字体并预先 seek 到第 3001 帧完成 GPU 着色器预热；
+2. **后台无感预编译**：Worker B 在独立线程静默加载 HTML、解析 Anime.js 模块、加载 Web 字体并预先 seek 到第 3001 帧完成 GPU 着色器预热；
 3. **瞬时 0ms 指针交接**：Worker A 交付完第 3000 帧的瞬间，主控指针原子切换至 Worker B，第 3001 帧零等待即时吐出；随后 Worker A 异步优雅退出。整个导出过程对于 Rust 宿主和 FFmpeg 编码器完全无感、绝对不顿挫。
 
 ---

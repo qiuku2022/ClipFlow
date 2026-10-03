@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98 (Host), wgpu 30.0, egui 0.36, FFmpeg 9.0.2, Python 3.13 (`uv`), Node.js 24 LTS  
+> **适用技术栈**：Rust 1.99 (Host), wgpu 30.0, egui 0.36, FFmpeg 9.0.2, Python 3.13 (`uv`), Node.js 24 LTS  
 > **核心地位**：ClipFlow 全局技术架构蓝图，规范主进程宿主模型、多运行时解耦拓扑、GPU 即时渲染管线、主时钟与容灾看门狗架构。
 
 ---
@@ -22,7 +22,7 @@
 
 ```mermaid
 flowchart TD
-    subgraph Host_Process ["主进程 (Rust 1.98 / wgpu 30.0 / egui 0.36)"]
+    subgraph Host_Process ["主进程 (Rust 1.99 / wgpu 30.0 / egui 0.36)"]
         direction TB
         subgraph Global_UI ["全局统一界面架构 (egui + wgpu)"]
             subgraph Pages_Container ["上层工作流专属视窗 (按需切换)"]
@@ -67,7 +67,7 @@ flowchart TD
     subgraph HyperFrames_Worker ["动效渲染子进程 (Node.js 24 / Headless Chrome)"]
         direction TB
         HF_CLI["HyperFrames 渲染运行时"]
-        HF_Compiler["HTML/CSS/JS/GSAP 编译与求值"]
+        HF_Compiler["HTML/CSS/JS/Anime.js 编译与求值"]
         FrameCapture["逐帧确定性离屏渲染 (Alpha 通道)"]
         HF_CLI --> HF_Compiler --> FrameCapture
     end
@@ -83,7 +83,7 @@ flowchart TD
 
 | 层次/模块 | 技术选型 | 版本/规范 | 决策与核心职责 |
 | :--- | :--- | :--- | :--- |
-| **桌面主进程宿主** | Rust | 1.98 (MSVC) | 内存安全、高性能原生并发，负责应用生命周期与时间轴状态调度 |
+| **桌面主进程宿主** | Rust | 1.99 (MSVC) | 内存安全、高性能原生并发，负责应用生命周期与时间轴状态调度 |
 | **GUI 即时模式框架** | egui | 0.36 | 轻量、无开销、纯 Rust 编写的 Immediate Mode GUI，易于绘制专业音视频波形与时间轴 |
 | **图形与渲染后端** | wgpu | 30.0 | 跨平台 GPU 硬件加速（DirectX 12 / Vulkan），用于 UI 渲染与视频解码帧纹理呈现 |
 | **多媒体底层引擎** | FFmpeg | 9.0.2 | 原生绑定或动态调用，负责快速取帧、实时缩略图生成、无损切片与导出渲染 |

@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-28  
-> **适用技术栈**：Rust 1.98, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
+> **适用技术栈**：Rust 1.99, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
 > **状态索引**：`[ ]` 待开始 | `[/]` 进行中 | `[x]` 已完成并通过验收 | `[-]` 已废弃/跳过  
 > **当前活动里程碑**：**Milestone 0 (M0)**  
 > **核心地位**：指导 ClipFlow 全生命周期的任务分解、依赖时序、验收命令 (DoD) 与进度追踪的单一执行事实来源。
@@ -307,7 +307,7 @@ flowchart TD
   - **前置依赖**：M0-T01
   - **涉改模块**：`node/hyperframes_renderer/`
   - **对应规范**：[hyperframes-spec.md 第 1 节](hyperframes-spec.md)
-  - **核心交付物**：启动 Headless Chromium 并注入虚拟时间驱动，实现 HTML/CSS/GSAP 模板在指定帧索引下的逐帧确定性求值与离屏截图。启动参数强制白名单化（`--disable-remote-fonts`、禁用后台网络；严禁 `--no-sandbox` 与 `--disable-web-security`），强制注入严格 CSP（`connect-src 'none'`、`object-src 'none'` 等）。
+  - **核心交付物**：启动 Headless Chromium 并注入虚拟时间驱动，实现 HTML/CSS/Anime.js 模板在指定帧索引下的逐帧确定性求值与离屏截图。启动参数强制白名单化（`--disable-remote-fonts`、禁用后台网络；严禁 `--no-sandbox` 与 `--disable-web-security`），强制注入严格 CSP（`connect-src 'none'`、`object-src 'none'` 等）。
   - **验收命令 (DoD)**：`node node/hyperframes_renderer/test_frame_render.js`
 
 - [ ] **M3-T02 Chromium 512MB 显存硬配额注入与 CDP 内存清洗管线**

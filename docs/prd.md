@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), faster-whisper 1.2.1, Node.js 24 LTS  
+> **适用技术栈**：Rust 1.99, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), faster-whisper 1.2.1, Node.js 24 LTS  
 > **核心地位**：ClipFlow 产品顶层需求规约，确立导演级 Agent 定位、达芬奇式 6 大分页 Dock 栏范式、公用时间线机制与 PR 剪辑对齐标准。
 
 ---
@@ -16,7 +16,7 @@
   - **Agent 即导演**：Agent 不仅是单点辅助工具，而是承担“导演”职责，负责整篇视频的剪辑规划方案设计（脚本理解、节奏把控、分镜挑选、花字与动效规约）并自动化驱动时间轴执行。
   - **口播智能剪辑**：根据音频波形与 ASR 文本，自动识别并剔除气口、停顿、语气词及错句重说，实现基于文本的无感粗剪。
   - **自动整理字幕**：高精度转写、标点智能断句与时间轴对齐，支持自动纠错与词级高亮。
-  - **继承 HyperFrames 动效体系**：引入 HeyGen 开源的“Agent-Native”框架 HyperFrames，允许 Agent 与用户以代码（HTML/CSS/JS/GSAP/Lottie）生成可寻址、逐帧确定性渲染的动画、角标、花字及图表包装。
+  - **继承 HyperFrames 动效体系**：引入 HeyGen 开源的“Agent-Native”框架 HyperFrames，允许 Agent 与用户以代码（HTML/CSS/JS/Anime.js/Lottie）生成可寻址、逐帧确定性渲染的动画、角标、花字及图表包装。
 
 ---
 

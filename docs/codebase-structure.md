@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98 (Cargo Workspace), Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
+> **适用技术栈**：Rust 1.99 (Cargo Workspace), Python 3.13 (`uv`), Node.js 24 LTS, FFmpeg 9.0.2  
 > **核心地位**：指导 ClipFlow 源码目录划分、各 crate 职责边界与单向无环依赖图谱（DAG）。
 
 ---

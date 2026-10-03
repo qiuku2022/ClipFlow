@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98 (MSVC), Python 3.13 (`uv`), FFmpeg 9.0.2, Node.js 24 LTS, pwsh 7  
+> **适用技术栈**：Rust 1.99 (MSVC), Python 3.13 (`uv`), FFmpeg 9.0.2, Node.js 24 LTS, pwsh 7  
 > **核心地位**：规范 Windows 平台开发环境初始化、工具链版本锁定、构建调试命令与环境诊断基线。
 
 ---
@@ -12,7 +12,7 @@
 | 工具 / 运行时 | 指定版本 | 校验命令 | 核心配置与注意点 |
 | :--- | :--- | :--- | :--- |
 | **操作系统** | Windows 10/11 x64 | `[System.Environment]::OSVersion` | 必须在 PowerShell 7 (`pwsh`) 终端中执行构建与运行 |
-| **Rust 工具链** | 1.98 | `rustc --version` / `cargo --version` | 必须安装 `x86_64-pc-windows-msvc` 目标与 Visual Studio C++ Build Tools |
+| **Rust 工具链** | 1.99 | `rustc --version` / `cargo --version` | 必须安装 `x86_64-pc-windows-msvc` 目标与 Visual Studio C++ Build Tools |
 | **图形库 (wgpu)** | 30.0 | - | 支持 DirectX 12 与 Vulkan 后端 |
 | **GUI 库 (egui)** | 0.36 | - | 即时模式 UI，由 `eframe 0.36` 驱动桌面窗口 |
 | **Python** | 3.13 | `uv run python --version` | 必须由 `uv` 统一管理，根目录以 `.python-version` 钉住 |
@@ -26,9 +26,9 @@
 ## 2. 初始环境配置步骤
 
 ### 2.1 安装 Rust 与 C++ 编译环境
-1. 安装 [rustup](https://rustup.rs/) 并配置 MSVC 1.98 工具链：
+1. 安装 [rustup](https://rustup.rs/) 并配置 MSVC 1.99 工具链：
    ```powershell
-   rustup default 1.98-x86_64-pc-windows-msvc
+   rustup default 1.99-x86_64-pc-windows-msvc
    ```
 2. 确保已安装 Visual Studio Build Tools（勾选 "C++ 桌面开发"）。
 

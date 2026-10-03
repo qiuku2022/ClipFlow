@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98, wgpu 30.0, egui 0.36, FFmpeg 9.0.2, Python 3.13 (`uv`), Node.js 24 LTS  
+> **适用技术栈**：Rust 1.99, wgpu 30.0, egui 0.36, FFmpeg 9.0.2, Python 3.13 (`uv`), Node.js 24 LTS  
 > **核心地位**：ClipFlow 全局技术规格单一事实来源（SSOT）导航索引，收录 18 篇技术子规范与研发路线图。
 
 ---
@@ -17,7 +17,7 @@
   - **核心骨架**：**全部页面公用一条时间线**（多轨数据、播放指针与硬解播放状态跨页面无缝漫游）。
   - **专业剪辑台**：`剪辑` 界面**完全对齐 Premiere Pro (PR)** 经典四区分屏与多轨时间轴布局。
 - **技术拓扑**：
-  - **主进程**：Rust 1.98 + wgpu 30.0 + egui 0.36 + FFmpeg 9.0.2
+  - **主进程**：Rust 1.99 + wgpu 30.0 + egui 0.36 + FFmpeg 9.0.2
   - **智能子进程**：Python 3.13 (`uv` 管理) + `faster-whisper` 1.2.1 (`large-v2`, INT8)
   - **动效引擎**：继承 `HyperFrames`（HTML/CSS/JS 确定性逐帧渲染）
 
@@ -37,7 +37,7 @@
 | 08 | [时间轴数据模型与工程持久化规范 (timeline-data-model.md)](timeline-data-model.md) | 亚毫秒 RationalTime、Rust 核心数据结构、Undo/Redo 事务系统与 .clipflow 容器规范 | 新增完成 (P0) |
 | 09 | [多媒体管线与音画同步渲染规范 (media-pipeline-spec.md)](media-pipeline-spec.md) | FFmpeg 9.0.2 D3D11VA 硬解、wgpu 30.0 纹理流水线、音频时钟 A/V Sync、波形与金字塔缓存 | 新增完成 (P0) |
 | 10 | [导演级 Agent 协议与剪辑指令集规范 (agent-director-spec.md)](agent-director-spec.md) | 导演大模型感知规划、Tool Calling 时间轴剪辑指令集、DirectorPlan Schema 与 Agent 工作台规格 | 新增完成 (P1) |
-| 11 | [HyperFrames 动效引擎集成规范 (hyperframes-spec.md)](hyperframes-spec.md) | Web 动效模板标准 (HTML/CSS/GSAP)、虚拟时间逐帧确定性渲染、双通道预览导出与预置资产库 | 新增完成 (P1) |
+| 11 | [HyperFrames 动效引擎集成规范 (hyperframes-spec.md)](hyperframes-spec.md) | Web 动效模板标准 (HTML/CSS/Anime.js v4.5)、虚拟时间逐帧确定性渲染、双通道预览导出与预置资产库 | 新增完成 (P1) |
 | 12 | [代码仓库架构与模块职责规范 (codebase-structure.md)](codebase-structure.md) | Cargo Workspace 多 Crate 划分、单向无环依赖拓扑与模块职责边界 | 新增完成 (P2) |
 | 13 | [辅助工作流页面规格 (workflow-pages-spec.md)](workflow-pages-spec.md) | 达芬奇 Dock 栏其余页面深度规格：【声音】混音台与 AI 降噪、【图片】封面制作、【导出】母带渲染 | 新增完成 (P2) |
 | 14 | [性能基准与质量验收规范 (qa-and-benchmarks.md)](qa-and-benchmarks.md) | 音画同步误差阈值 (≤16.6ms)、60FPS渲染、ASR/粗剪准确率红线与自动化测试套件 | 新增完成 (P3) |

@@ -64,6 +64,6 @@
 - **环境与版本锁死**：
   - **Python**：由 `uv` 严格管理，锁死 Python 3.13（见 `.python-version`）。安装依赖与执行脚本必须使用 `uv`（例如 `uv run`），严禁使用系统 Python、pip 全局安装或 conda。
   - **FFmpeg**：媒体管线统一调用 FFmpeg 9.0.2，严禁降级 8.x 或使用未锁定的 master 分支。
-  - **桌面与渲染**：主进程锁定 Rust 1.98，图形与界面渲染锁定 `wgpu` 30.0 与 `egui` 0.36。动效子进程锁定 Node.js 24 LTS。
+  - **桌面与渲染**：主进程锁定 Rust 1.99，图形与界面渲染锁定 `wgpu` 30.0 与 `egui` 0.36。动效子进程锁定 Node.js 24 LTS。
   - **本机转写**：faster-whisper 1.2.1，模型固定为 `large-v2`，默认 GPU INT8，无 CUDA 时回退 CPU，批大小为 8。
 - **终端与脚本**：终端统一使用 PowerShell 7（`pwsh`）语法编写命令与执行脚本，不使用 Windows PowerShell 5.1 或 cmd。

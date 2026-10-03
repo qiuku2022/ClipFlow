@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98 (MSVC), wgpu 30.0, cosmic-text 0.12 / glyphon 0.5, faster-whisper 1.2.1  
+> **适用技术栈**：Rust 1.99 (MSVC), wgpu 30.0, cosmic-text 0.12 / glyphon 0.5, faster-whisper 1.2.1  
 > **核心地位**：规范口播字幕（C1 轨）在节目监视器上的 GPU 硬件着色管线、多级字体回退、词级卡拉OK高亮与双向剪辑交互语义。
 
 ---

@@ -2,7 +2,7 @@
 
 > **版本**：v0.1.0  
 > **更新时间**：2026-09-26  
-> **适用技术栈**：Rust 1.98 (MSVC), Windows Win32 API, Node.js 24 / Chromium, Python 3.13  
+> **适用技术栈**：Rust 1.99 (MSVC), Windows Win32 API, Node.js 24 / Chromium, Python 3.13  
 > **核心地位**：规范全系统多进程安全边界、Web 动效执行沙箱、Windows 命名管道访问控制列表 (DACL)、工程文件防注入与用户媒体隐私保护机制。
 
 ---
@@ -14,7 +14,7 @@ ClipFlow 具备“本地硬件加速 + 本地 AI 推理 + 云端 LLM 编排 + We
 ```mermaid
 flowchart TD
     subgraph Untrusted_Inputs ["不可信输入源 (Threat Vectors)"]
-        T1["第三方/LLM 动效代码 (HTML/JS/GSAP)"]
+        T1["第三方/LLM 动效代码 (HTML/JS/Anime.js)"]
         T2["本机非提权恶意进程 (管道扫描/信令劫持)"]
         T3["外部工程导入文件 (恶意 FCP7 XML / EDL)"]
         T4["素材侧间接提示词注入 (恶意转写台词)"]
@@ -46,7 +46,7 @@ flowchart TD
 
 ## 2. HyperFrames 动效渲染安全沙箱规范 (Chromium Sandboxing)
 
-无头 Chromium 负责执行用户导入或大模型动态生成的 HTML/CSS/JS/GSAP 动效。为杜绝恶意代码利用浏览器内核漏洞实现本地文件读取或远程代码执行 (RCE)，系统设立三重硬隔离：
+无头 Chromium 负责执行用户导入或大模型动态生成的 HTML/CSS/JS/Anime.js 动效。为杜绝恶意代码利用浏览器内核漏洞实现本地文件读取或远程代码执行 (RCE)，系统设立三重硬隔离：
 
 ### 2.1 启动参数安全基线 (Flag Whitelist & Blacklist)
 - **绝对禁用标志 (Blacklist - 严禁配置)**：
