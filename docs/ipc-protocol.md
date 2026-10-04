@@ -75,6 +75,9 @@
 }
 ```
 
+> **显存隔离与分块并发度铁律**：  
+> 当开启 `enable_chunking` 时，本地 Python Worker 内部对各个音频分块（Chunk）的转录并发度严格锁定为 **1**（单 Whisper 实例串行推进），仅在音频物理切片导出与后处理文本缝合时允许 CPU 多线程，坚决杜绝多 Whisper 实例并发竞争显存引发 CUDA OOM。
+
 #### 实时分片增量流式事件 (Python $\to$ Rust `asr.chunk_stream`)
 为杜绝长视频 ASR 阻塞等待全量结果，Python Worker 边推理边流式推送增量切片，驱动 Rust 宿主在时间轴 C1 轨实时铺排：
 ```json
@@ -132,7 +135,7 @@
 ```
 
 ### 2.2 口播剪辑分析接口：`speech.analyze_cuts`
-用于让 Python 端分析并输出气口、无声段、错句及语气词建议剪除清单：
+用于让 Python 端分析并输出气口、无声段、错句及语气词建议剪除清单（本接口为声学与文本分析复合服务，物理代码实现统一归属于 `python/clipflow_worker/nlp/` 模块）：
 
 ```json
 // 请求

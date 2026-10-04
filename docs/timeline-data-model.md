@@ -328,6 +328,34 @@ pub struct WordTiming {
     pub end_time: RationalTime,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SubtitleLayout {
+    /// 仅显示原文
+    OnlyOriginal,
+    /// 仅显示译文
+    OnlyTranslate,
+    /// 原文在上，译文在下
+    OriginalOnTop,
+    /// 译文在上，原文在下
+    TranslateOnTop,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BackgroundBoxStyle {
+    /// 背景填充色 (HEX RGBA，如半透明纯黑 [0.0, 0.0, 0.0, 0.65])
+    pub fill_color: [f32; 4],
+    /// 圆角半径 (px，基准 1080p 下默认 8.0px)
+    pub corner_radius: f32,
+    /// 水平内边距 (px，默认 16.0px)
+    pub padding_h: f32,
+    /// 垂直内边距 (px，默认 8.0px)
+    pub padding_v: f32,
+    /// 边框描边宽度 (0.0 表示无边框，默认 0.0px)
+    pub border_width: f32,
+    /// 边框颜色 (默认完全透明)
+    pub border_color: [f32; 4],
+}
+
 /// 字幕样式与排版模型 (完全对齐 subtitle-render-spec.md)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SubtitleStyle {
@@ -342,6 +370,11 @@ pub struct SubtitleStyle {
     pub shadow_color: [f32; 4],
     pub position_y_percent: f32,
     pub karaoke_highlight_color: Option<[f32; 4]>,
+    pub layout: SubtitleLayout,
+    pub secondary_font_size: f32,
+    pub secondary_fill_color: [f32; 4],
+    pub vertical_gap: f32,
+    pub background_box: Option<BackgroundBoxStyle>,
 }
 
 /// 片段多态专属载荷 (承载不同轨道类型的领域数据)
@@ -349,9 +382,10 @@ pub struct SubtitleStyle {
 pub enum ClipPayload {
     /// 普通音视频与静态图片片段
     Media,
-    /// 口播字幕片段 (C1 轨，含词级时间戳与文字样式)
+    /// 口播字幕片段 (C1 轨，含词级时间戳、可选译文与文字样式)
     Subtitle {
         text: String,
+        translated_text: Option<String>,
         words: Vec<WordTiming>,
         style: SubtitleStyle,
     },
