@@ -666,3 +666,49 @@ pub struct SuggestedAudioPlan {
 - **时间线实时投影 (Timeline Projection)**：Agent 处于思考与方案输出阶段时，不破坏原始时间轴，而是以“虚拟图层（Ghost Layer）”形式在公用时间线上红显待剪除区间、紫显建议动效。
 - **对话即修改 (Chat-driven Refinement)**：用户只需在中间对话框输入自然语言（例如“不要删那句强调安全的说明”），Agent 自动更新 `DirectorPlan` 中对应片段的 `approved_by_default` 标记。
 - **一键原子落地 (Atomic Staged Dispatch)**：点击“一键采纳”后，主进程 Staged DAG 编译器依次执行波纹折叠、坐标重映射与图层挂载，最终打包为单个 `CompoundCommand` 落地，耗时毫秒级，且用户随时可在【剪辑】页按 `Ctrl + Z` 一键全盘撤销。
+
+---
+
+## 6. 口播台词优化与反思翻译闭环 (Subtitle Optimization & Reflective Translation)
+
+在口播视频精剪和出海字幕生成时，大模型处理字幕台词必须保证**时间戳零破损**与**自然口语表达**。系统建立严格的双重保障：
+
+### 6.1 Agent Loop 台词纠错容错闭环
+针对大模型在纠错、去口头语气词（“呃/啊/那个”）或标点规范化时偶尔产生的 JSON 格式破损或漏句现象，执行层构建最多 3 轮的自愈循环：
+
+```
+[输入带编号字幕字典] ──► [LLM 纠错推理] ──► [json_repair 容错解析] ──► [确定性校验]
+                                                                    │
+      ┌────────────────────── 校验失败 (最多重试 3 轮) ───────────────┤
+      ▼                                                             ▼
+[注入差错反馈重新提示]                                           [校验通过]
+                                                                    │
+[若 3 轮仍失配] ──► [SubtitleAligner (difflib.ndiff) 兜底对齐] ◄────┘
+                                     │
+                      [输出 100% 对应时间戳的干净字幕]
+```
+
+1. **结构容错解析**：统一使用 `json_repair` 库解析模型输出，自动修复缺失闭合括号、未转义引号等轻微语法瑕疵；
+2. **确定性多维校验 (`validate_optimization_result`)**：
+   - **Key 完整性**：返回的编号集合必须与输入键严格 1:1 对等，禁止擅自合行或丢行；
+   - **编辑距离与语义漂移**：检查单行相似度（`difflib.SequenceMatcher.ratio >= 0.70`），防止大模型发生无意义脱轨或将原文字幕擅自替换为其他语言；
+3. **闭环反馈修正**：校验失败时，将具体的缺失 Key 列表与格式错误构造为 User Message 追加至会话，引导模型局部纠偏（最多 3 轮）；
+4. **底层对齐兜底 (`SubtitleAligner`)**：若达到最大轮数仍有缺失项，调用序列差分对齐器将缺失项由前一项占位安全对齐，绝不向上抛出空指针或导致 Rust 时间轴索引越界。
+
+### 6.2 三阶段反思翻译 Prompt 架构 (Reflective Translation)
+为彻底消灭传统机器翻译的生硬“机翻腔”与句式死板，高级双语字幕生成内置基于吴恩达 Reflection Agent 思想的标准三阶段 Prompt：
+
+* **Stage 1: 初翻 (Initial Translation)**：准确转换全部核心语义，保留原句编号；
+* **Stage 2: 机器翻译味诊断与深度反思 (MT Pattern Detection & Reflection)**：
+  要求大模型主动检视 7 大缺陷并提出修改依据：
+  1. *结构生硬 (Structural rigidity)*：是否机械模仿源语言语序？
+  2. *直译用词 (Literal word choices)*：是否有更地道的口语/俚语表达？
+  3. *语境缺失 (Missing context)*：是否有隐含的情绪或重点需要明朗化？
+  4. *文化匹配 (Cultural mismatch)*：是否可自然转换为中文成语、俗语或网络习惯用语？
+  5. *语域适切性 (Register issues)*：正式程度是否符合口播视频风格？
+  6. *母语测试 (Native speaker test)*：母语者在面对面交流时是否会这样表达？
+  7. *跨字幕连贯性 (Cross-subtitle coherence)*：与前后相邻字幕的承接是否流畅自然？
+* **Stage 3: 母语级重写 (Native-Quality Rewrite)**：
+  基于诊断重构最终译文，产出具备影视级表现力的双语字幕。
+
+---

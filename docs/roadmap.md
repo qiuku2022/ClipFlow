@@ -215,15 +215,15 @@ flowchart TD
   - **前置依赖**：M0-T06
   - **涉改模块**：`python/clipflow_worker/asr/`
   - **对应规范**：[architecture.md 第 4.6 节](architecture.md) & [cache-and-storage-spec.md](cache-and-storage-spec.md)
-  - **核心交付物**：从 `%LOCALAPPDATA%\ClipFlow\models` 载入 `large-v2` INT8 权重；实现 `FallbackGovernor` 三级容灾自愈：L1 进程级 500ms 快速重试 → L2 CUDA OOM/驱动缺失在 $\le 3.5\text{s}$ 内降级 CPU → L3 连续失败熔断隔离并在 UI 呈现降级通知。提供 `MockAsrWorker` 供单元测试脱机运行。
+  - **核心交付物**：从 `%LOCALAPPDATA%\ClipFlow\models` 载入 `large-v2` INT8 权重；实现 `FallbackGovernor` 三级容灾自愈：L1 进程级 500ms 快速重试 → L2 CUDA OOM/驱动缺失在 $\le 3.5\text{s}$ 内降级 CPU → L3 连续失败熔断隔离并在 UI 呈现降级通知。自动检测 GPU 设备，针对 RTX 50 系列（Blackwell 架构）平滑切换至 `float16` 精度；内置高频幻觉黑名单（“点赞订阅”、“打赏支持”等）清洗层。提供 `MockAsrWorker` 供单元测试脱机运行。
   - **验收命令 (DoD)**：`uv run pytest python/clipflow_worker/tests/test_asr_fallback.py`
 
-- [ ] **M2-T02 IPC `asr.chunk_stream` 实时流式分片推送与进度租约**
+- [ ] **M2-T02 IPC `asr.chunk_stream` 实时流式分片推送、长音频缝合与进度租约**
   - **前置依赖**：M2-T01
   - **涉改模块**：`python/clipflow_worker/`, `crates/clipflow-ipc/`
   - **对应规范**：[ipc-protocol.md 第 2 节](ipc-protocol.md)
-  - **核心交付物**：实现按 2 秒音频分片增量上报 `asr.chunk_stream` 事件；Rust 侧集成 `ProgressLeaseTracker`，动态计算长任务超时租约，长视频转写误杀率严格为 0.0%。
-  - **验收命令 (DoD)**：`cargo test -p clipflow-ipc --test lease_tracker_test`
+  - **核心交付物**：实现按 2 秒音频分片增量上报 `asr.chunk_stream` 事件；长音频（$\ge 15\text{min}$）自动启用 20 分钟切块 + 10 秒重叠的分块转录，通过 `ChunkMerger`（Groq 滑动窗口对齐算法）在公共匹配段中点无缝缝合，断言接缝处吞字/叠字率为 **0.0%**；Rust 侧集成 `ProgressLeaseTracker` 动态计算长任务超时租约，长视频转写误杀率严格为 0.0%。
+  - **验收命令 (DoD)**：`cargo test -p clipflow-ipc --test lease_tracker_test && uv run pytest python/clipflow_worker/tests/test_chunk_merger.py`
 
 - [ ] **M2-T03 IPC 抢占式软中断与显存重置 (`asr.cancel`)**
   - **前置依赖**：M2-T02
@@ -239,12 +239,12 @@ flowchart TD
   - **核心交付物**：实现将外部 `f64` 浮点秒量化吸附至整数帧分界的数学算子，自动消除 $\le 1$ 帧微隙，杜绝黑屏坏帧。
   - **验收命令 (DoD)**：`cargo test -p clipflow-timeline --test acl_snapping_test`
 
-- [ ] **M2-T05 口播停顿、气口与错重句声学/NLP 检测 (`speech.analyze_cuts`)**
+- [ ] **M2-T05 口播停顿、语义断句逆向映射与切除分析 (`speech.analyze_cuts` & `nlp.align_sentences`)**
   - **前置依赖**：M2-T02
   - **涉改模块**：`python/clipflow_worker/nlp/`
-  - **对应规范**：[ipc-protocol.md 第 2.2 节](ipc-protocol.md)
-  - **核心交付物**：基于静音能量检测与台词重复模式匹配，输出待切除的气口（$\ge 400\text{ms}$）、语气助词和重复句时间区间列表。
-  - **验收命令 (DoD)**：`uv run pytest python/clipflow_worker/tests/test_nlp_cleaner.py`
+  - **对应规范**：[ipc-protocol.md 第 2.2~2.3 节](ipc-protocol.md)
+  - **核心交付物**：基于静音能量检测输出待切除的气口（$\ge 400\text{ms}$）、语气助词和重复句时间区间；实现 LLM 语言学断句文本与底层词级时间戳数组的滑动窗口逆向映射（`nlp.align_sentences`），并在失配时以 $\le 10\text{ms}$ 自动降级为 500ms 物理停顿间隙与高频连词规则切分。
+  - **验收命令 (DoD)**：`uv run pytest python/clipflow_worker/tests/test_nlp_cleaner.py && uv run pytest python/clipflow_worker/tests/test_sentence_alignment.py`
 
 - [ ] **M2-T06 文本驱动剪辑双模联动状态机 (`clipflow-ui`)**
   - **前置依赖**：M1-T08, M2-T04
@@ -260,11 +260,11 @@ flowchart TD
   - **核心交付物**：实现音频切点波形过零点对齐（$\le 2\text{ms}$）、语音尾音 $+30\text{ms}$ 保留、起始辅音 $-40\text{ms}$ 保护窗及拼合接缝处 5ms 交叉淡入淡出，彻底消除爆音。
   - **验收命令 (DoD)**：`cargo test -p clipflow-media --test zero_crossing_anti_pop_test`
 
-- [ ] **M2-T08 基于 `cosmic-text` + `glyphon` 的 GPU 离屏文本着色管线 (`clipflow-ui`)**
+- [ ] **M2-T08 基于 `cosmic-text` + `glyphon` 的 GPU 离屏文本与胶囊底板着色管线 (`clipflow-ui`)**
   - **前置依赖**：M1-T04
   - **涉改模块**：`crates/clipflow-ui/`, `crates/clipflow-media/`
   - **对应规范**：[subtitle-render-spec.md 第 1~3 节](subtitle-render-spec.md)
-  - **核心交付物**：构建 wgpu 独立文本着色通道，实现 Windows 微软雅黑字体回退、文字描边与阴影着色器，以及播放头随动词级卡拉OK染色高亮。
+  - **核心交付物**：构建 wgpu 独立文本着色通道与 WGSL SDF 圆角胶囊底板着色器（`SubtitleBoxPass`）；支持双语分层排版（主副文本间距与字号分级）、Windows 微软雅黑字体回退、文字描边/阴影着色器，以及播放头随动词级卡拉OK染色高亮。
   - **验收命令 (DoD)**：`cargo test -p clipflow-ui --test subtitle_gpu_render_test`
 
 - [ ] **M2-T09 Apple FCP7 XML (`xmeml v5`) 流式序列化器 (`clipflow-timeline`)**

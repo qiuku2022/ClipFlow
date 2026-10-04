@@ -43,9 +43,10 @@ ClipFlow_Release/
 > **存储分离说明**：依据 [cache-and-storage-spec.md](cache-and-storage-spec.md)“双轨分离制”，大体积 AI 模型严禁随软件安装包本地打包或随工程目录重复复制，统一集中寻址于 `%LOCALAPPDATA%\ClipFlow\models\faster-whisper-large-v2\`。
 
 ### 2.1 硬件感知按需扩展机制 (On-Demand Acceleration Packs)
-- **GPU 加速包自动识别**：
-  软件启动时探测本地 GPU 设备。若发现 NVIDIA 独显（RTX 20/30/40 系列及更高），且 `resources/cuda_runtime/` 为空，在设置面板弹出轻量提示：
+- **GPU 加速包自动识别与架构兼容自愈**：
+  软件启动时探测本地 GPU 设备。若发现 NVIDIA 独显（RTX 20/30/40/50 系列及更高），且 `resources/cuda_runtime/` 为空，在设置面板弹出轻量提示：
   *“检测到您的设备支持 NVIDIA GPU 极速转写与硬件加速，是否一键下载 GPU 增强包 (约 600MB)？”*
+  针对最新 RTX 50 系列（Blackwell 架构，Compute Capability 10.x），加速包运行时强制要求 NVIDIA 驱动 $\ge 570.0$，且 Python Worker 在初始化时自动检测并优先绑定 `float16` 精度，防止旧版本 CTranslate2 在 INT8 GEMM 算子下的未定义行为。
 - **国内高速镜像源与断点续传**：
   `whisper-large-v2` 模型权重（INT8 约 1.5GB）与 CUDA 加速包统一接入国内高速 CDN 节点与阿里 ModelScope 开源镜像，支持断点续传与后台静默校验（SHA-256），下载中途退出可随时恢复。
 - **HyperFrames 动效运行时治理**：

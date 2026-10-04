@@ -71,16 +71,44 @@ pub fn init_subtitle_font_system() -> cosmic_text::FontSystem {
 
 ## 3. 字幕样式数据模型与 WGSL 着色特效
 
-字幕片段挂载在时间轴 `C1` 轨道上，单条字幕拥有独立的排版属性与视觉特效：
+字幕片段挂载在时间轴 `C1` 轨道上，单条字幕拥有独立的排版属性与视觉特效，原生支持双语分层与圆角胶囊底板：
 
 ```rust
 use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SubtitleLayout {
+    /// 仅显示原文
+    OnlyOriginal,
+    /// 仅显示译文
+    OnlyTranslate,
+    /// 原文在上，译文在下
+    OriginalOnTop,
+    /// 译文在上，原文在下
+    TranslateOnTop,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BackgroundBoxStyle {
+    /// 背景填充色 (HEX RGBA，如半透明纯黑 [0.0, 0.0, 0.0, 0.65])
+    pub fill_color: [f32; 4],
+    /// 圆角半径 (px，基准 1080p 下默认 8.0px)
+    pub corner_radius: f32,
+    /// 水平内边距 (px，默认 16.0px)
+    pub padding_h: f32,
+    /// 垂直内边距 (px，默认 8.0px)
+    pub padding_v: f32,
+    /// 边框描边宽度 (0.0 表示无边框，默认 0.0px)
+    pub border_width: f32,
+    /// 边框颜色 (默认完全透明)
+    pub border_color: [f32; 4],
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SubtitleStyle {
     /// 字体族名称 (默认 "Microsoft YaHei UI")
     pub font_family: String,
-    /// 基础字号 (基准 1080p 画布下像素高度，如 48px)
+    /// 主文本基础字号 (基准 1080p 画布下像素高度，如 48px)
     pub font_size: f32,
     /// 字体粗细 (100 ~ 900, 默认 700 Bold)
     pub font_weight: u16,
@@ -98,6 +126,16 @@ pub struct SubtitleStyle {
     pub position_y_percent: f32,
     /// 词级高亮样式 (卡拉OK点亮效果)
     pub karaoke_highlight_color: Option<[f32; 4]>,
+    /// 双语字幕排版布局 (默认 OnlyOriginal)
+    pub layout: SubtitleLayout,
+    /// 副文本字号 (基准 1080p 画布下像素高度，默认 32px)
+    pub secondary_font_size: f32,
+    /// 副文本填充色 (默认次级浅灰 [0.85, 0.85, 0.85, 1.0])
+    pub secondary_fill_color: [f32; 4],
+    /// 主副文本垂直间距 (px，默认 8.0px)
+    pub vertical_gap: f32,
+    /// 圆角胶囊背景板配置 (可选)
+    pub background_box: Option<BackgroundBoxStyle>,
 }
 ```
 
@@ -105,6 +143,22 @@ pub struct SubtitleStyle {
 - 当播放指针游走在 `[clip.start, clip.end)` 期间，文本着色器接收当前 `Playhead_PTS`；
 - 遍历当前字幕块内的词级时间戳 `words: Vec<WordTiming>`；
 - 当前命中词渲染为高饱和度强调色（如 Neutral Modern 钴蓝信号 `#2F6FEB`、金黄标色 `#EAB308` 或高光亮白），未发音或已发音词保持次级灰白，赋予口播视频极强的视觉抓手。
+
+### 3.2 WGSL 圆角胶囊底板着色管线 (SDF Rounded Box Pass)
+为彻底杜绝传统方案使用 CPU/Pillow 逐帧生成 PNG 临时图片再压制的低效与高磁盘 I/O（1000 句字幕需压制数千张图片），ClipFlow 采用纯 GPU 硬件管线：
+- **执行顺序**：在 glyphon 文本渲染 Pass 执行前，插入专属的 `SubtitleBoxPass`；
+- **抗锯齿渲染**：片元着色器使用有向距离场（Signed Distance Field, SDF）解析计算圆角矩形，在边界处通过 `smoothstep` 采样平滑插值实现亚像素级抗锯齿，完全免除锯齿感；
+- **性能指标**：单次 Draw Call 绘制当前监视器帧内全部可见胶囊底板，显存占用 $\le 64\text{KB}$，耗时 $\le 0.05\text{ms}$，且支持 100% 实时预览与无损缩放。
+
+### 3.3 规范化排版折叠与标点清洗准则
+- **字符阈值与换行保护**：
+  - CJK 语言（中文、日文、韩文）：单行硬限制 $\le 25$ 个字符；
+  - 西文拉丁语言（英文）：单行硬限制 $\le 18$ 个词；
+  - 遇到长句优先在自然语法从句边界或空格处折叠为双行，双行垂直居中排布。
+- **行尾标点自动净化**：
+  - ASR 或 LLM 生成的口播字幕常带有句末逗号或句号（如 `“今天天气真好，”`），排版管线在字形塑形前统一剥离行尾停顿标点（`，。！？`），保持影视字幕清爽工业质感。
+- **动态基准缩放因子 (Resolution Scaling)**：
+  - 界面排版以 1080p（高度 1080px）为基准高度。在 720p 代理或 4K/8K 监视器缩放时，字号、圆角、内边距与间距统一乘以尺度缩放因子 $S = H_{\text{canvas}} / 1080.0$，保障多端视觉一致性。
 
 ---
 

@@ -37,7 +37,13 @@
     "media_path": "D:/Footage/raw_talking_head.mp4",
     "language": "zh",
     "compute_type": "int8",
-    "batch_size": 8
+    "batch_size": 8,
+    "vad_filter": true,
+    "vad_threshold": 0.4,
+    "enable_chunking": true,
+    "chunk_length_s": 1200,
+    "chunk_overlap_s": 10,
+    "hallucination_filter": true
   }
 }
 ```
@@ -51,7 +57,10 @@
   "result": {
     "task_id": "task-asr-20260923-01",
     "audio_duration_s": 320.5,
-    "chunk_count_estimated": 160
+    "chunk_count_estimated": 160,
+    "effective_device": "cuda",
+    "effective_compute_type": "int8",
+    "is_rtx_50_series": false
   }
 }
 
@@ -167,6 +176,69 @@
   }
 }
 ```
+
+### 2.3 语义断句与词级时间戳逆向映射接口：`nlp.align_sentences`
+由 Rust 宿主调用外部 LLM 完成语言学断句（在纯文本插入 `<br>`）后，将无时间戳的切分句子下发给 Python Worker，利用滑动窗口与序列比对（`difflib.SequenceMatcher`）在底层精确的词级时间戳（`words`）数组上逆向提取物理起止时间，实现“语义自然、时间精确”的短视频字幕排版：
+
+```json
+// 请求 (Rust -> Python)
+{
+  "jsonrpc": "2.0",
+  "id": "req-1004",
+  "method": "nlp.align_sentences",
+  "params": {
+    "task_id": "task-asr-20260923-01",
+    "sentences": [
+      "今天我们来聊一下如何用 Rust 制作现代桌面软件",
+      "并深入剖析多进程架构与 GPU 渲染的核心实践"
+    ],
+    "words": [
+      {"word": "今天", "start": 12.35, "end": 12.80},
+      {"word": "我们", "start": 12.80, "end": 13.10},
+      {"word": "来聊一下", "start": 13.10, "end": 13.90},
+      {"word": "如何用", "start": 13.90, "end": 14.30},
+      {"word": "Rust", "start": 14.30, "end": 14.80},
+      {"word": "制作现代桌面软件", "start": 14.80, "end": 15.80},
+      {"word": "并深入剖析", "start": 16.20, "end": 17.10},
+      {"word": "多进程架构", "start": 17.10, "end": 18.20},
+      {"word": "与 GPU 渲染的", "start": 18.20, "end": 19.10},
+      {"word": "核心实践", "start": 19.10, "end": 19.85}
+    ],
+    "max_gap_ms": 500,
+    "fuzzy_threshold": 0.65
+  }
+}
+
+// 响应 (Python -> Rust)
+{
+  "jsonrpc": "2.0",
+  "id": "req-1004",
+  "result": {
+    "aligned_sentences": [
+      {
+        "index": 0,
+        "text": "今天我们来聊一下如何用 Rust 制作现代桌面软件",
+        "start": 12.35,
+        "end": 15.80,
+        "word_count": 6,
+        "matched_by": "exact_sliding_window"
+      },
+      {
+        "index": 1,
+        "text": "并深入剖析多进程架构与 GPU 渲染的核心实践",
+        "start": 16.20,
+        "end": 19.85,
+        "word_count": 4,
+        "matched_by": "exact_sliding_window"
+      }
+    ],
+    "unmatched_count": 0,
+    "fallback_to_rules": false
+  }
+}
+```
+
+* **降级与容错防御规范**：若大模型发生幻觉或篡改文本导致无法匹配的句子超过 5 句，Python Worker 触发三级熔断：停止大模型映射，自动降级为基于 `words` 之间物理静音间隙（$\ge 500\text{ms}$）与高频连词（中文“但是/而且/所以”，英文“because/and/but”）的纯规则切分，并在响应中标记 `fallback_to_rules: true`，耗时必须 $\le 10\text{ms}$。
 
 ---
 
