@@ -43,5 +43,5 @@
 | 14 | [性能基准与质量验收规范 (qa-and-benchmarks.md)](qa-and-benchmarks.md) | 音画同步误差 (≤16.6ms)、60FPS渲染、ASR 准确率红线、Mock Harness 50ms CI 黄金回归门禁 | 已补全对齐 (v0.2.0) |
 | 15 | [工程缓存、临时工作区与资产寻址规范 (cache-and-storage-spec.md)](cache-and-storage-spec.md) | 双轨分离制拓扑、工程同级 .clipflow_cache、%LOCALAPPDATA% 模型共享与 LRU 淘汰 | 已对齐最新架构 (v0.2.0) |
 | 16 | [字幕样式排版与 GPU 监视器文本渲染规范 (subtitle-render-spec.md)](subtitle-render-spec.md) | wgpu 离屏文本着色管线、cosmic-text/glyphon、词级卡拉OK高亮与双模剪辑联动 | 已对齐最新架构 (v0.2.0) |
-| 17 | [工程研发路线图与原子任务看板 (roadmap.md)](roadmap.md) | M0~M4 全周期 50 个原子任务、时序依赖、验收命令 (DoD) 与任务追踪看板 (Agent Harness 对齐) | 全面重构 (v0.2.0) |
+| 17 | [工程研发路线图与原子任务看板 (roadmap.md)](roadmap.md) | v1.0 MVP (M0~M2 共 21 个原子任务：剪辑台与语音转字幕) 与 M3~M6 远期规划待办池 | 纯净收敛 (v0.3.0) |
 | 18 | [安全威胁模型、沙箱隔离与隐私合规规范 (security-and-privacy.md)](security-and-privacy.md) | Chromium 沙箱、命名管道 DACL 权限、XML 防注入、DPAPI 凭据加密与 MCP 工具防投毒校验 | 已校正对齐 (v0.2.0) |
