@@ -238,6 +238,15 @@ impl TimelineMcpServer {
 }
 ```
 
+#### MCP 传输层形态铁律 (Transport Architecture)
+1. **核心服务内嵌铁律（In-Process Transport）**：
+   - `TimelineMcpServer` 与 `PerceptionMcpServer` **必须强制采用 Rust 进程内异步通道（`tokio::sync::mpsc` In-Process Channel）**；
+   - 工具直接引用内存中的 `ShadowTimelineSandbox`，调用开销 $\le 0.05\text{ms}$，**严格禁止使用 Stdio 跨进程序列化调用核心时间轴**，彻底根除跨进程序列化开销与死锁风险。
+2. **外挂生态服务隔离（Out-of-Process Transport）**：
+   - 仅对创作者可选加载的第三方扩展（如网络素材检索库、第三方音效生成工具）开放标准 Stdio / HTTP MCP 子进程传输；
+   - 外部 MCP 服务故障或崩溃时由看门狗直接隔离，绝不影响宿主时间轴与核心剪辑功能。
+
+
 ### 3.2 只读感知 MCP Tools (Read-Only Inspection Tools)
 
 > **只读工具四项契约**：  
@@ -705,3 +714,95 @@ pub struct SuggestedAudioPlan {
 2. **`rig-core`** (Rust 现代 LLM/Agent 统一框架)：
    - **引入理由**：统一抽象 20+ LLM 提供商，提供强类型 Tool 绑定与 Thinking 思考链透传，避免手写大量脆弱的 HTTP/SSE 客户端。
    - **作用域**：仅作为 Agent 宿主层驱动，与 UI 层和多媒体底层彻底解耦。
+
+---
+
+## 8. 工程鲁棒性、熔断看门狗与测试桩规范 (Robustness, Circuit Breakers & Mock Harness)
+
+为了保证桌面端非编系统在面对偶发大模型不可靠输出、长程推理与高频用户打断时的工业级稳定性，系统建立严格的三重工程防线：
+
+### 8.1 打断与级联取消契约 (Cancellation & Preemption Protocol)
+
+在桌面 GUI 中，创作者的操作始终享有最高物理优先级：
+
+```
+[创作者交互 (拖拽播放头/手动剪切/点击停止)]
+                     │
+                     ▼
+       [触发 UserPreemptionGuard]
+                     │
+         ┌───────────┴───────────┐
+         ▼                       ▼
+[根 CancellationToken 取消]  [当前提案标记为 Stale]
+         │
+   ┌─────┴──────────────────┐
+   ▼                        ▼
+[级联强停所有 Sub-Agents] [中止 reqwest HTTP/SSE 流]
+   │
+   ▼
+[ShadowTimelineSandbox 回滚清空 (≤ 5ms)]
+   │
+   ▼
+[Ghost Layer 虚拟投影瞬时静默卸载]
+```
+
+1. **Tokio `CancellationToken` 级联树**：
+   - 每次 Agent 规划任务启动时，主控 Harness 分配一个根 `CancellationToken`；
+   - 派生的所有并发 Ephemeral Sub-Agent 均持由此 Token 的子派生 Token；
+   - 一旦根 Token 触发取消，正在进行中的网络请求（`reqwest`）、异步等待与子智能体任务全部在下一个 `await` 点瞬间级联中断退出。
+2. **沙箱脏状态回滚与 Ghost Layer 瞬时卸载**：
+   - 收到取消信号瞬间，纯内存 `ShadowTimelineSandbox` 必须在 $\le 5\text{ms}$ 内清空所有未提交切片并重置为当前主时间轴的镜像；
+   - 前端主时间线上的 Ghost Layer 虚拟投影毫秒级静默卸载，严禁在界面残留虚假的半成品剪辑标记。
+3. **人类创作者抢占锁 (`UserPreemptionGuard`)**：
+   - 当创作者在非编主界面执行手动修改（如添加切点、调整片段入出点、切换序列）时，Harness 状态机自动将当前运行中的 Agent 规划置为 `Stale`（陈旧失效）并自动退出，杜绝陈旧规划覆盖创作者最新人工编辑成果。
+
+### 8.2 死循环熔断与 Token 预算门禁 (Circuit Breakers & Hard Budgets)
+
+为杜绝大模型在 Tool Loop 中陷入死循环或因上下文爆炸烧爆用户额度，Harness 实施三道物理级断路器：
+
+```rust
+pub struct CircuitBreakerPolicy {
+    /// 1. 单会话 Tool Loop 步数硬上限 (默认 8 步)
+    pub max_loop_steps: usize,
+    /// 2. 重复调用检测阈值 (连续重复相同参数即熔断)
+    pub max_identical_tool_calls: usize,
+    /// 3. 软 Token 水位线 (达到后强制触发上下文压缩)
+    pub soft_token_limit: u32,
+    /// 4. 硬 Token 水位线 (达到后强制终止并返回当前最优方案)
+    pub hard_token_limit: u32,
+}
+```
+
+1. **步数硬上限 (Max Steps Hard Cap)**：
+   - 单次用户任务的 Tool Loop 执行次数严格锁定为 $\le 8$ 步；
+   - 达到第 8 步仍未收敛时，Harness 强制截断 Tool 调用链，并强制模型依据当前沙箱状态直接输出收敛总结。
+2. **工具重复调用探测器 (`ToolRepetitionDetector`)**：
+   - Harness 在内存中维护最近 3 次工具调用的 `(tool_name, arguments_hash)` 环形滑动窗口；
+   - 一旦检测到模型连续 2 次下发相同或参数相似度超过 $95\%$ 的工具调用（典型死循环特征），断路器立刻弹开，阻断调用并将诊断错误注入上下文，要求模型调整策略或直接终止。
+3. **双水位 Token 预算熔断器**：
+   - **软水位（32,768 Tokens）**：触发自动上下文修剪（Context Compaction），强行折叠历史只读工具回包；
+   - **硬水位（49,152 Tokens）**：强制熔断，终止本次会话并以当前沙箱已验证的最佳半成品输出为最终草案，杜绝无限计费失控。
+
+### 8.3 确定性内存测试桩与 CI 回归契约 (Deterministic Mock Harness for CI)
+
+为了保证 Agent 模块在 GitHub Actions 等无 GPU、无外网 API 凭证的 CI/CD 环境中能够确定性自动化验证，构建毫秒级纯内存测试桩体系：
+
+```rust
+#[async_trait]
+pub trait LlmDriver: Send + Sync {
+    async fn complete(&self, request: &LlmCompletionRequest) -> Result<LlmCompletionResponse, AgentError>;
+}
+
+/// 纯内存确定性测试桩 (回放预设 Thinking 思考块与 Tool Call 序列)
+pub struct MockLlmDriver {
+    pub scripted_responses: Vec<LlmCompletionResponse>,
+    pub call_cursor: std::sync::atomic::AtomicUsize,
+}
+```
+
+1. **CI 黄金回归基准 (Golden Benchmark DoD)**：
+   - 测试用例库收录一段 60 秒标准口播的静态转写数据与 VAD 物理静音锚点；
+   - `MockLlmDriver` 模拟输出包含 1 组思考链、1 次只读查询 `timeline_inspect_range` 和 1 次批量切除 `timeline_propose_cuts` 的两轮交互；
+   - 验证链路：ASR 索引解析 $\to$ Mock 思考与工具分发 $\to$ 沙箱度量求值 $\to$ Staged DAG 编译 $\to$ 写入真实 `TimelineEngine` $\to$ 单次 `undo()` 撤销；
+   - **性能与确定性红线**：全链路回归在单线程测试环境下执行耗时锁定在 $\le 50\text{ms}$，测试断言覆盖 0 坏帧、0 悬挂任务与 0 内存泄漏。
+

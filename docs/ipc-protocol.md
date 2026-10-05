@@ -11,8 +11,9 @@
 
 - **内核级生命周期约束**：所有派生的 Python 和 Node.js 子进程，在创建时必须以 `CREATE_SUSPENDED` 状态原子化纳入 Windows **`Job Object`**（配置 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`），确保宿主主进程发生任何异常终止时，内核级联强杀整棵子孙进程树，孤儿逃逸率严格为 **$0.0\%$**。
 - **架构职责边界**：
-  - **Agent 导演大模型**：由 Rust 宿主主进程通过标准 HTTP 客户端直接调用外部 OpenAI/Claude 兼容 API，无需经由 Python 中转；
+  - **Agent 导演大模型与 MCP 总线**：由 Rust 宿主主进程通过标准 HTTP 客户端直接调用外部 OpenAI/Claude 兼容 API（或本地 Ollama）；核心时间轴与感知工具采用基于 `rmcp` 的**进程内异步内存总线（In-Process Channel，零序列化开销）**，与跨子进程 IPC 完全隔离；
   - **Python 智能计算 Worker**：专注于本地密集计算（faster-whisper 1.2.1 ASR 转写、VAD 气口能量分析与口播切分推荐）；
+
   - **HyperFrames 动效渲染 Worker**：专注于离屏确定性渲染，通过命名共享内存（零拷贝）直传实时预览帧，离线烘焙模式通过命名管道驱动。
 - **Rust 主进程 (Coordinator)** $\longleftrightarrow$ **Python 智能子进程 (ASR/NLP Worker)**
   - **信令信道 (信道 A)**：Windows 异步双工命名管道（`\\.\pipe\clipflow-py-{pid}`），采用 Overlapped I/O 与标准换行符分隔的 **JSON-RPC 2.0** 协议，控制往返耗时 RTT $\le 0.35\text{ms}$。
