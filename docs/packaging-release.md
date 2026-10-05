@@ -1,7 +1,7 @@
 # 打包分发与更新方案 (Packaging & Release)
 
-> **版本**：v0.1.0  
-> **更新时间**：2026-09-26  
+> **版本**：v0.2.0  
+> **更新时间**：2026-10-05  
 > **适用技术栈**：Rust 1.99, Python 3.13, Node.js 24 LTS, FFmpeg 9.0.2, NSIS, signtool  
 > **核心地位**：规范 Windows 端复合多运行时目录布局、分级安装包（Lite/Full）编排、NSIS 打包脚本、代码签名与静默热更新机制。
 
@@ -37,7 +37,7 @@ ClipFlow_Release/
 │   ├── bin/
 │   │   ├── ffmpeg.exe              # FFmpeg 9.0.2
 │   │   └── ffprobe.exe             # FFprobe 9.0.2
-│   └── templates/                  # 预置动效模板库 (HTML/CSS/JS)
+│   └── templates/                  # 预置动效模板库 (HTML/CSS/JS/Anime.js v4.5)
 ```
 
 > **存储分离说明**：依据 [cache-and-storage-spec.md](cache-and-storage-spec.md)“双轨分离制”，大体积 AI 模型严禁随软件安装包本地打包或随工程目录重复复制，统一集中寻址于 `%LOCALAPPDATA%\ClipFlow\models\faster-whisper-large-v2\`。

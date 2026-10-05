@@ -1,7 +1,7 @@
 # 时间轴数据模型与工程持久化规范 (Timeline Data Model & Project Format)
 
-> **版本**：v0.1.0  
-> **更新时间**：2026-09-26  
+> **版本**：v0.2.0  
+> **更新时间**：2026-10-05  
 > **适用技术栈**：Rust 1.99 (MSVC), serde 1.0, zstd 0.13  
 > **核心地位**：ClipFlow 全局时间轴单一事实来源（SSOT）的 Rust 内部数据结构、命令模式事务、亚毫秒时间计算与 `.clipflow` 工程存储标准。
 
@@ -132,7 +132,7 @@ impl SmpteTimecode {
 大模型 (LLM) 与外部 Agent 工具通过自然语言或 JSON 交互时，产出的时间戳天然为十进制浮点秒数（`f64`）。为杜绝浮点数侵入时间轴内部状态，系统设立显式防腐层：外部浮点秒数在穿透至 `TimelineCommand` 之前，必须由 `AgentTimelineAcl` 强制量化并吸附至最近的物理帧分界点，并消除切片微小缝隙引发的 1 帧黑屏空洞。
 
 > **只读与修改路径隔离原则**：  
-> `AgentTimelineAcl` 仅作为写操作与时间轴事务的单向防腐栅栏。Agent 执行只读状态查询（如 `timeline_query_range`）时，直接读取内存中各 Clip 的 `RationalTime` 并转换为人类与 LLM 习惯的 `f64` 浮点秒返回，**绝不经过 ACL 的二次整数截断量化**，避免无意义的微秒级精度漂移。
+> `AgentTimelineAcl` 仅作为写操作与时间轴事务的单向防腐栅栏。Agent 执行只读状态查询（如 `timeline_inspect_range`）时，直接读取内存中各 Clip 的 `RationalTime` 并转换为人类与 LLM 习惯的 `f64` 浮点秒返回，**绝不经过 ACL 的二次整数截断量化**，避免无意义的微秒级精度漂移。
 
 ```rust
 /// Agent 外部通信使用的原始请求结构 (仅用于 IPC / JSON 序列化)
@@ -696,7 +696,7 @@ pub struct AgentUserPreferences {
     pub bgm_ducking_preference_db: Option<f32>,
 }
 ```
-*注：内存常驻的 `TimelineMemoryIndex`（包含时序声学物理锚点、分幕缓存与负样本指纹，详见 agent-director-spec.md 第 2.4 节）在落盘时将其语义分段摘要与负样本切点签名沉淀映射至 `AgentProjectSession`（`cached_outline` 与 `rejected_cut_hashes`），确保工程重开时零 Token 损耗还原记忆上下文。该字段随 `Project` 一并序列化至 `.clipflow` 容器内部，经 Zstandard 压缩存储，体积增加小于 15KB，但在异机迁移和重新打开时能够实现 100% 完整的 Agent 会话与剪辑方案还原。*
+*注：内存常驻的 `TimelineMemoryIndex`（包含时序声学物理锚点、分幕缓存与负样本指纹，详见 agent-director-spec.md 第 2.5 节）在落盘时将其语义分段摘要与负样本切点签名沉淀映射至 `AgentProjectSession`（`cached_outline` 与 `rejected_cut_hashes`），确保工程重开时零 Token 损耗还原记忆上下文。该字段随 `Project` 一并序列化至 `.clipflow` 容器内部，经 Zstandard 压缩存储，体积增加小于 15KB，但在异机迁移和重新打开时能够实现 100% 完整的 Agent 会话与剪辑方案还原。*
 
 
 ---

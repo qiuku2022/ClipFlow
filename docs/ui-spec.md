@@ -1,7 +1,7 @@
 # ClipFlow UI 设计规范与视觉体系 (UI Specification)
 
-> **版本**：v0.1.0  
-> **更新时间**：2026-09-26  
+> **版本**：v0.2.0  
+> **更新时间**：2026-10-05  
 > **适用技术栈**：Rust 1.99, egui 0.36, egui_wgpu, wgpu 30.0, OpenDesign Neutral Modern Dark  
 > **核心地位**：规范全系统视觉基调、工业级圆角梯队、Neutral Modern 色彩 Tokens、字体排版层级、核心控件样式与专业非编多轨时间轴专属色谱。
 

@@ -1,7 +1,7 @@
 # 系统架构设计 (Architecture)
 
-> **版本**：v0.1.0  
-> **更新时间**：2026-09-26  
+> **版本**：v0.2.0  
+> **更新时间**：2026-10-05  
 > **适用技术栈**：Rust 1.99 (Host), wgpu 30.0, egui 0.36, FFmpeg 9.0.2, Python 3.13 (`uv`), Node.js 24 LTS  
 > **核心地位**：ClipFlow 全局技术架构蓝图，规范主进程宿主模型、多运行时解耦拓扑、GPU 即时渲染管线、主时钟与容灾看门狗架构。
 
@@ -178,7 +178,7 @@ flowchart TD
    - 创作者显式确认采纳后，Rust 宿主 Staged DAG 编译器依次执行 4 阶段流水线：Stage 1 源时间倒序波纹剪除 $\to$ Stage 2 坐标映射函数（`TimeMapping`） $\to$ Stage 3 挂载 B-Roll 与 HyperFrames 动效 $\to$ Stage 4 铺设 BGM 与 Ducking 避让。
    - 全部步骤原子化编译为单一 `CompoundCommand` 写入公用时间轴（SSOT），毫秒级铺排并支持 `Ctrl + Z` 完全撤销；若发生轨道碰撞，触发两级自愈状态机局部重编排。
 3. **动效生成与合成阶段 (动画界面)**：
-   - Agent 根据文案生成 HyperFrames 动效代码（HTML/CSS）。
+   - Agent 根据文案生成 HyperFrames 动效代码（HTML/CSS/JS/Anime.js v4.5）。
    - 调度 HyperFrames 离屏渲染出带透明通道的切片，挂载到时间轴高层轨道（如 V2/V3/FX）。
 4. **人工微调与导出阶段 (剪辑/导出界面)**：
    - 用户在对齐 PR 的专业时间轴中进行毫秒级微调。

@@ -1,7 +1,7 @@
 # 性能基准与质量验收规范 (QA & Performance Benchmarks)
 
-> **版本**：v0.1.0  
-> **更新时间**：2026-09-26  
+> **版本**：v0.2.0  
+> **更新时间**：2026-10-05  
 > **适用技术栈**：Rust 1.99, wgpu 30.0, egui 0.36, FFmpeg 9.0.2, Python 3.13 / faster-whisper 1.2.1  
 > **核心地位**：明确 ClipFlow 桌面端在音画同步、多轨渲染吞吐、内存/显存配额、ASR 精度及自动化测试验收的量化基准，作为所有功能合并与版本发布的唯一准入红线。
 
@@ -204,8 +204,9 @@ flowchart LR
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 
-# 2. 运行纯逻辑单元测试 (核心时间轴引擎)
+# 2. 运行纯逻辑与通信单元测试 (核心时间轴引擎 & IPC/Agent Harness)
 cargo test --workspace
+cargo test -p clipflow-ipc
 
 # 3. 运行 Python 智能子进程单元测试
 uv run pytest python/clipflow_worker/tests/
@@ -290,4 +291,18 @@ cargo test -p clipflow-timeline --test project_serialization_stress -- --nocaptu
 cargo test -p clipflow-app --test agent_golden_eval -- --nocapture
 ```
 若发现综合评分低于上一版本基线，CI 自动阻止合并，确保提示词工程的迭代具备明确的量化回归守护。
+
+### 6.4 工程级鲁棒性与确定性测试桩回归 (Mock Harness CI Gates)
+为了保证 Agent 模块在 GitHub Actions 等无 GPU、无外网 API 凭证的严苛 CI 环境中实现确定性自动化核验，系统以 `MockLlmDriver` 纯内存测试桩（详见 [`agent-director-spec.md` 第 8.3 节](agent-director-spec.md#83-确定性内存测试桩与-ci-回归契约-deterministic-mock-harness-for-ci)）为核心准入红线：
+
+1. **50ms 全链路纯内存回归门禁 (Golden CI Benchmark)**：
+   - 执行命令：`cargo test -p clipflow-ipc --test agent_mock_harness_eval`；
+   - 验证闭环：ASR 内存索引解析 $\to$ Mock 思考块与只读查询工具派发 $\to$ Shadow Timeline 物理度量求值 $\to$ Staged DAG 编译 $\to$ 真实 `TimelineEngine` 原子写入 $\to$ 单次 `undo()` 彻底还原；
+   - **性能与质量红线**：单线程运行耗时绝对锁定在 **$\le 50\text{ms}$**，0 坏帧、0 悬挂异步任务、0 内存泄漏。
+2. **Tokio `CancellationToken` 级联打断与 5ms 回滚断言**：
+   - 模拟 Agent 在并发求解分幕切片中途，创作者突然触发拖拽播放头或点击取消；
+   - 合格断言：根 Token 触发取消后，所有 Ephemeral Sub-Agent 与异步流瞬时级联终止，纯内存 `ShadowTimelineSandbox` 在 **$\le 5\text{ms}$** 内清空未提交切片并复原主时间线镜像，前端 Ghost Layer 虚拟投影毫秒级静默卸载。
+3. **断路器与双水位 Token 熔断断言**：
+   - 注入死循环工具调用（连续 2 次相同入参），断言断路器在第 2 次立即弹开并阻断调用；
+   - 模拟上下文膨胀，断言在达到软水位（32,768 Tokens）时 100% 触发上下文修剪（Context Compaction），达到硬水位（49,152 Tokens）时立即强制熔断并交付当前最佳方案。
 
