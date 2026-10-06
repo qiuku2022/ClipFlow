@@ -306,7 +306,7 @@ flowchart TD
 
 ### 5.2 零渲染工程草稿导出通道 (Zero-Render Draft Export Channel)
 
-并非所有分发场景都需要耗时的像素重编码。ClipFlow 原生规划基于 `clipflow-timeline` 的**零渲染工程草稿直出通道**：
+并非所有分发场景都需要耗时的像素重编码。ClipFlow 规划基于 `clipflow-timeline` 的**零渲染工程草稿直出通道**（此特性严格推迟至 M3 阶段及以后实施）：
 - **剪映 / CapCut 草稿通道 (`draft_content.json`)**：
   - 彻底规避音视频像素重采样与编解码，直接将时间线的有理数帧映射为剪映微秒级轨道与片段引用；
   - 导出耗时 $\le 100\text{ms}$，生成的工程文件可直接被剪映桌面端识别打开，实现“ClipFlow 负责极速粗剪与对位，剪映负责挂载大众流行贴纸与特效”的混合生产力闭环。
