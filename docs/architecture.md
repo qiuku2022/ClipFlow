@@ -155,10 +155,12 @@ flowchart TD
 
 ### 4.7 外部非编工程交换与合规诊断架构 (`TimelineExporter`)
 - **接口契约抽象与多格式解耦**：定义 `TimelineExporter` Trait 统领外部工程交换，将时间轴核心状态机与下游具体 XML/文本解析格式彻底解耦；
-- **M3 工业级切点外发管线 (远期规划)**：
-  1. **Apple FCP7 XML (`xmeml v5`)**：平行多轨拓扑 1:1 原生映射，彻底消除 FCPX 磁性故事板 Spine 树模型的降维阻抗，经由 `quick-xml` 流式序列化输出，文件路径强制规范为 RFC 3986 `file://localhost/...` 百分号转义 URI，Premiere Pro 与 DaVinci Resolve 打开成功率 $\ge 99.9\%$；
-  2. **规范化 CMX 3600 EDL**：符合 80 列定宽对齐，Reel ID 规整映射为 8 字符，通过注入 `* FROM CLIP NAME` 与 `* SOURCE FILE` 扩展注释行传递完整 UTF-8 中文长路径，打破传统穿孔卡协议导致的乱码与套底离线死穴；
-  3. **有理数无损帧对齐**：帧序号换算全链路基于 `i128` 整数有理数整除，严禁任何 `f64` 浮点秒参与中间计算，绝对保障 1000 个连续切片 0 帧漂移；
+- **M3 工业级切点外发与零渲染工程直出管线 (`Zero-Render Draft Exporter`)**：
+  1. **剪映草稿包直出 (`draft_content.json`)**：构建符合剪映工程规格的轻量目录结构（`draft_content.json`、`draft_meta_info.json`），将多轨音频、视频切片及文本字幕无缝注入剪映时间线，创作者可直接唤起剪映专业版进行贴纸、特效二次精修，实现纯文本与切片毫秒级直出；
+  2. **Apple FCPXML 1.10 DTD**：严格遵循 FCPXML 1.10 Spine 故事板与 Asset 引用规范，生成被 Final Cut Pro 与 DaVinci Resolve 原生支持的现代交换工程；
+  3. **Apple FCP7 XML (`xmeml v5`)**：平行多轨拓扑 1:1 原生映射，彻底消除磁性故事板 Spine 树模型的降维阻抗，经由 `quick-xml` 流式序列化输出，文件路径强制规范为 RFC 3986 `file://localhost/...` 百分号转义 URI，Premiere Pro 与 DaVinci Resolve 打开成功率 $\ge 99.9\%$；
+  4. **规范化 CMX 3600 EDL**：符合 80 列定宽对齐，Reel ID 规整映射为 8 字符，通过注入 `* FROM CLIP NAME` 与 `* SOURCE FILE` 扩展注释行传递完整 UTF-8 中文长路径，打破传统穿孔卡协议导致的乱码与套底离线死穴；
+  5. **有理数无损帧对齐与零渲染通道**：帧序号换算全链路基于 `i128` 整数有理数整除，严禁任何 `f64` 浮点秒参与中间计算，绝对保障 1000 个连续切片 0 帧漂移；草稿直出全程跳过 FFmpeg 像素级重编码，生成耗时 $\le 100\text{ms}$；
 - **静态合规预检与降级诊断 (`ConformInspector`)**：
   导出前静态扫描全序列图层；若挂载了 HyperFrames Web 动效（FX 轨）或复杂贝塞尔变速曲线，自动弹出三级诊断看板（Information / Warning / UnsupportedDropped），提供“推荐渲染为 Apple ProRes 4444 独立透明图层后送入 PR 叠加”等清晰指导，消灭黑盒静默丢特性的焦虑；
 - **面向未来的 OpenTimelineIO (OTIO) 通用中枢演进**：
@@ -172,7 +174,7 @@ flowchart TD
 1. **意图解析与沙箱推演阶段 (Agent 界面)**：
    - 用户上传长素材，Python 子进程完成 ASR 词级转写与 VAD 气口能量分析，构建常驻宿主的 `TimelineMemoryIndex` 并作为 MCP Resource 暴露。
    - Director Coordinator Agent 启动现代 Harness Tool-Loop（基于 `rmcp` 协议与 `rig-core` 驱动），按需并发派发轻量 Ephemeral Sub-Agents 求解各分幕切片。
-   - 所有剪辑工具在纯内存的 **`ShadowTimelineSandbox`** 中即时求值并输出客观物理反馈（剪后时长、气口清除率、图层重叠预警），驱动模型自适应微调，输出结构化《导演剪辑方案 (Director Plan)》。
+   - 所有剪辑工具在纯内存沙盒 **`DraftTimeline` / `TimelineSnapshot`** 中即时求值（遵循 Propose-Apply 事务契约与 `apply_transaction` 校验），输出客观物理反馈（剪后时长、气口清除率、图层重叠预警），驱动模型自适应微调，输出结构化《导演剪辑方案 (Director Plan)》。
 2. **执行与下发阶段**：
    - 方案在公用时间线上生成半透明 Ghost Layer 虚拟投影供创作者审查，支持创作者多轮自然语言即时打断与局部微调。
    - 创作者显式确认采纳后，Rust 宿主 Staged DAG 编译器依次执行 4 阶段流水线：Stage 1 源时间倒序波纹剪除 $\to$ Stage 2 坐标映射函数（`TimeMapping`） $\to$ Stage 3 挂载 B-Roll 与 HyperFrames 动效 $\to$ Stage 4 铺设 BGM 与 Ducking 避让。
@@ -182,5 +184,5 @@ flowchart TD
    - 调度 HyperFrames 离屏渲染出带透明通道的切片，挂载到时间轴高层轨道（如 V2/V3/FX）。
 4. **人工微调与导出阶段 (剪辑/导出界面)**：
    - 用户在对齐 PR 的专业时间轴中进行毫秒级微调。
-   - 在“导出”页面调用 FFmpeg 9.0.2 硬件加速完成母带输出。
+   - 在“导出”页面支持双通道输出：既可调用 FFmpeg 9.0.2 硬件加速完成像素级母带成片输出，亦支持选择“零渲染工程草稿直出”通道，毫秒级导出剪映草稿或 FCPXML/Premiere XML 送入外部专业宿主。
 

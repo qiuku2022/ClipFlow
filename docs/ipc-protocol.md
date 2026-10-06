@@ -21,6 +21,9 @@
 - **Rust 主进程 (Coordinator)** $\longleftrightarrow$ **HyperFrames 动效渲染器 (Worker)**
   - 控制信道：CLI 驱动与异步命名管道（`\\.\pipe\clipflow-hf-{pid}`）下发渲染指令。
   - 像素信道：Windows 命名共享内存（`CreateFileMappingW`）三槽位环形池极速直传 Raw RGBA，单帧 4K 总线直传延迟 $\le 1.5\text{ms}$，详见 `hyperframes-spec.md`。
+- **外部 Agent 客户端 (Claude Code / Cursor / 外部 IDE) $\longleftrightarrow$ Rust 宿主 (外部 MCP 拓扑)**
+  - **双模传输层 (Transport)**：`clipflow-ipc` 提供标准 Stdio 与 Streamable HTTP 两种暴露方式，使外部 Agent 能直接连接宿主，无缝调用时间轴探测与剪辑工具；
+  - **渐进式工具通知 (`notifications/tools/list_changed`)**：支持 MCP 规范的动态工具集下发。在草稿创建、粗剪决策、特效装配不同工作流阶段，主进程主动向客户端推送工具列表变更，实现大模型上下文 Prompt 缓存命中率与认知负载最优化。
 
 ---
 
