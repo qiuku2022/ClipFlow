@@ -155,14 +155,14 @@ flowchart TD
 
 ### 4.7 外部非编工程交换与合规诊断架构 (`TimelineExporter`)
 - **接口契约抽象与多格式解耦**：定义 `TimelineExporter` Trait 统领外部工程交换，将时间轴核心状态机与下游具体 XML/文本解析格式彻底解耦；
-- **M2 零阻抗切点外发管线**：
+- **M3 工业级切点外发管线 (远期规划)**：
   1. **Apple FCP7 XML (`xmeml v5`)**：平行多轨拓扑 1:1 原生映射，彻底消除 FCPX 磁性故事板 Spine 树模型的降维阻抗，经由 `quick-xml` 流式序列化输出，文件路径强制规范为 RFC 3986 `file://localhost/...` 百分号转义 URI，Premiere Pro 与 DaVinci Resolve 打开成功率 $\ge 99.9\%$；
   2. **规范化 CMX 3600 EDL**：符合 80 列定宽对齐，Reel ID 规整映射为 8 字符，通过注入 `* FROM CLIP NAME` 与 `* SOURCE FILE` 扩展注释行传递完整 UTF-8 中文长路径，打破传统穿孔卡协议导致的乱码与套底离线死穴；
   3. **有理数无损帧对齐**：帧序号换算全链路基于 `i128` 整数有理数整除，严禁任何 `f64` 浮点秒参与中间计算，绝对保障 1000 个连续切片 0 帧漂移；
 - **静态合规预检与降级诊断 (`ConformInspector`)**：
   导出前静态扫描全序列图层；若挂载了 HyperFrames Web 动效（FX 轨）或复杂贝塞尔变速曲线，自动弹出三级诊断看板（Information / Warning / UnsupportedDropped），提供“推荐渲染为 Apple ProRes 4444 独立透明图层后送入 PR 叠加”等清晰指导，消灭黑盒静默丢特性的焦虑；
 - **面向未来的 OpenTimelineIO (OTIO) 通用中枢演进**：
-  为 M3+/M4 预留基于好莱坞工业标准 OTIO 的 Universal IR 适配层，支持多轨向 FCPX Spine 树模型的降维投影与双向工程回程（Round-trip Conforming）。
+  为 M4/M5 预留基于好莱坞工业标准 OTIO 的 Universal IR 适配层，支持多轨向 FCPX Spine 树模型的降维投影与双向工程回程（Round-trip Conforming）。
 
 ---
 

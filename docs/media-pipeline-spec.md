@@ -2,7 +2,7 @@
 
 > **版本**：v0.2.0  
 > **更新时间**：2026-10-05  
-> **适用技术栈**：Rust 1.99, FFmpeg 9.0.2 (MSVC 静态/动态绑定), wgpu 30.0 (DirectX 12 / Vulkan), cpal 0.15  
+> **适用技术栈**：Rust 1.99, FFmpeg 9.0.2 (MSVC 静态/动态绑定), wgpu 30.0 (DirectX 12 / Vulkan), WASAPI (windows-sys) / cpal 0.15  
 > **核心地位**：规范从多媒体硬解、像素格式转换、GPU 纹理上传、音频驱动时钟同步到多轨离屏母带导出的完整管线。
 
 ---
@@ -136,7 +136,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
 ### 3.2 WASAPI 硬件 DAC 时钟锚定与动态时延补偿 (`WasapiHardwareAnchor`)
 
-通过 Windows 原生 WASAPI `IAudioClock` 驱动接口实现硬件级时钟捕获：
+通过 Windows 原生 WASAPI（基于 `windows-sys` / `windows` 直调 COM 接口 `IAudioClock` 与 `IAudioClient`，`cpal` 作为备用抽象）实现硬件级时钟捕获：
 1. **硬件原子锁存**：在驱动音频回调中断中，调用 `IAudioClock::GetPosition(&device_pos, &qpc_pos)`，同时捕获当前 DAC 物理播放采样点绝对计数 $P_{\text{hw}}$ 与 CPU 系统单调计数器 $QPC_{\text{hw}}$；
 2. **DAC 真实播放时间戳计算**：
    $$T_{\text{dac\_ns}} = \left( \frac{P_{\text{hw}}}{F_{\text{hw}}} \times 10^9 \right) \text{ ns}$$

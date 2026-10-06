@@ -31,18 +31,20 @@ flowchart TD
         Semaphores["Win32 命名信号量 (Sem_Empty / Sem_Full)"]
     end
 
-    subgraph Node_Worker ["HyperFrames 子进程 (Node.js 24 LTS)"]
+    subgraph Node_Worker ["HyperFrames 子进程 (Node.js 24 LTS 宿主)"]
         PoolManager["双 Worker 乒乓调度器 (PingPongPoolManager)"]
         WorkerA["Worker A (当前活跃生产)"]
         WorkerB["Worker B (后台异步预热)"]
         MemoryGov["CDP 内存主动清洗 (MemoryGovernor)"]
+        NativeWriter["Win32 共享内存写入插件 (C++ Addon: SharedMemWriter)"]
         
         PoolManager --> WorkerA
         PoolManager -.->|提前 300 帧后台预热| WorkerB
         WorkerA --> MemoryGov
+        WorkerA --> NativeWriter
     end
 
-    subgraph Web_Template ["动效模板页面 (HTML/CSS/Anime.js)"]
+    subgraph Chromium_Sandbox ["Chromium 无头沙箱渲染引擎 (Headless Process)"]
         DOM["HTML/SVG DOM 结构"]
         Anime_Timeline["Anime.js 动画时间轴 (.seek(t))"]
         PureContract["纯函数式求值契约 (Level-1 Pure Analytical)"]
@@ -50,8 +52,8 @@ flowchart TD
     end
 
     Watchdog <==>|结构化 IPC 管道| PoolManager
-    WorkerA --> Web_Template
-    PureContract -->|无损 Raw RGBA 极速写入| Slot0
+    WorkerA <==>|CDP 虚拟时钟步进 & 像素流传输| Chromium_Sandbox
+    NativeWriter -->|无损 Raw RGBA 写入物理共享内存| Slot0
     Slot0 -->|零堆分配内存映射| SharedMemConsumer
     Semaphores -.->|背压同步| SharedMemConsumer
 ```
@@ -249,7 +251,7 @@ export const CHROMIUM_LOCKED_FLAGS = [
 1. **三槽位循环共享内存环 (Triple Buffer Ring)**：通过 Win32 API `CreateFileMappingW` 开辟命名共享物理内存（4K 单槽 32MB，总计约 96MB），由 Node 渲染端写入，Rust 宿主直接零拷贝读取；
 2. **直通透明通道 (Straight Alpha)**：为防止 wgpu 合成时在羽化边缘产生黑边或白锯齿，共享内存中的像素缓冲区强制约定为**非预乘的 Straight RGBA** 格式，Alpha 混合由 Rust 端统一在片元着色器中执行；
 3. **原子信号量背压流控**：使用 Windows 原生命名信号量 `Sem_Empty`（初值 3）与 `Sem_Full`（初值 0）刚性协调生产者与消费者，防止丢帧与槽位覆盖；
-4. **单帧直传延迟**：4K 3840x2160 RGBA 单帧物理传输延迟锁定在 **$\le 1.5\text{ms}$**，相较于 Base64 提速 30 倍以上。
+4. **单帧物理直传延迟**：4K 3840x2160 RGBA 单帧从共享内存写入完成到 Rust `wgpu` 纹理提交的纯总线传输延迟锁定在 **$\le 1.5\text{ms}$**（相较于 Base64 编码传输提速 30 倍以上；整帧 DOM/Canvas 栅格化则由后台无头 Worker 步进队列或离线烘焙模式驱动，确保主线程回放丝滑）。
 
 ### 3.5 双 Worker 异步预热乒乓池 (`PingPongPoolManager`)
 

@@ -9,12 +9,12 @@
 
 ## 1. 交付形态与发布目标 (Tiered Packaging)
 
-为了彻底解决“Python + CUDA + Node + FFmpeg”复合架构导致的 3GB+ 体积黑洞，系统提供两种发布形态：
+为了彻底解决“Python + CUDA + Node + FFmpeg”复合架构导致的 3GB+ 体积黑洞，系统确立分级分阶段发布形态：
 
-1. **轻量核心安装包 (`ClipFlow-Setup-Lite.exe`，推荐，体积 $\le 250\text{ MB}$)**：
-   - 内置：Rust 主进程、轻量嵌入式 Python 3.13 (纯 CPU 推理)、精简版 FFmpeg 9.0.2、Node.js 24 LTS 与无头 Chromium 动效运行时；
-   - 动效预览依托 Node.js 24 无头 Chromium 渲染池，通过 Win32 命名共享内存向 `wgpu 30.0` 直传 Raw RGBA（零磁盘 IO、单帧延迟 $\le 1.5\text{ms}$）；
-   - 任何无显卡轻薄本或普通 PC 可极速下载，开箱即用；首次转写时按需拉取 `whisper-large-v2` INT8 模型或外置导入。
+1. **轻量核心安装包 (`ClipFlow-Setup-Lite.exe`，推荐，体积 $\le 200\text{ MB}$)**：
+   - **v1.0 MVP 内置**：Rust 宿主主进程、轻量嵌入式 Python 3.13 (纯 CPU 推理)、精简版 FFmpeg 9.0.2；
+   - 任何无显卡轻薄本或普通 PC 可极速下载，开箱即用；首次转写时按需拉取 `whisper-large-v2` INT8 模型或外置导入；
+   - **M4 阶段扩展**：后续进入 Milestone 4 阶段后，以可选功能包形式挂载 Node.js 24 LTS 与无头 Chromium 动效运行时，通过 Win32 命名共享内存向 `wgpu 30.0` 直传 Raw RGBA。
 2. **全量离线专业版 (`ClipFlow-Setup-Full.exe`，供局域网与内网工作室)**：
    - 预捆绑 CUDA 12.x / cuDNN 运行时与 `whisper-large-v2` INT8 权重（体积约 2.2GB，解压即部署至 `%LOCALAPPDATA%\ClipFlow\models\`），解压即享满血 GPU 加速。
 
@@ -30,14 +30,14 @@ ClipFlow_Release/
 │   │   ├── python.exe
 │   │   └── Lib/site-packages/
 │   ├── cuda_runtime/               # [按需下载] CUDA 12 / cuDNN 动态链接库 (.dll)
-│   ├── hyperframes_runtime/        # HyperFrames 离屏渲染轻量级环境
+│   ├── hyperframes_runtime/        # [M4 阶段按需下载] HyperFrames 离屏渲染轻量级环境
 │   │   ├── node.exe                # Node.js 24 LTS 运行时
 │   │   ├── package.json
-│   │   └── chromium/               # 精简无头 Chromium (~70MB，仅保留无头渲染核心与必备 dll)
+│   │   └── chromium/               # 精简无头 Chromium (~120MB)
 │   ├── bin/
 │   │   ├── ffmpeg.exe              # FFmpeg 9.0.2
 │   │   └── ffprobe.exe             # FFprobe 9.0.2
-│   └── templates/                  # 预置动效模板库 (HTML/CSS/JS/Anime.js v4.5)
+│   └── templates/                  # [M4 阶段引入] 预置动效模板库 (HTML/CSS/JS/Anime.js v4.5)
 ```
 
 > **存储分离说明**：依据 [cache-and-storage-spec.md](cache-and-storage-spec.md)“双轨分离制”，大体积 AI 模型严禁随软件安装包本地打包或随工程目录重复复制，统一集中寻址于 `%LOCALAPPDATA%\ClipFlow\models\faster-whisper-large-v2\`。

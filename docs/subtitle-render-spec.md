@@ -2,14 +2,14 @@
 
 > **版本**：v0.2.0  
 > **更新时间**：2026-10-05  
-> **适用技术栈**：Rust 1.99 (MSVC), wgpu 30.0, cosmic-text 0.12 / glyphon 0.5, faster-whisper 1.2.1  
+> **适用技术栈**：Rust 1.99 (MSVC), wgpu 30.0, cosmic-text 0.12, wgpu 30 兼容文本着色管线 (glyphon 兼容版本 / 自研 Glyph Atlas Pass), faster-whisper 1.2.1  
 > **核心地位**：规范口播字幕（C1 轨）在节目监视器上的 GPU 硬件着色管线、多级字体回退、词级卡拉OK高亮与双向剪辑交互语义。
 
 ---
 
 ## 1. 字幕图层架构与 GPU 渲染管线
 
-为保证在 4K 60fps 监视器缩放、全屏回放及高码率导出时不产生文字模糊与锯齿，字幕图层脱离传统的 CPU 软件栅格化，采用基于 **`wgpu 30.0` + `cosmic-text` / `glyphon` 的 GPU 离屏文本着色流水线**：
+为保证在 4K 60fps 监视器缩放、全屏回放及高码率导出时不产生文字模糊与锯齿，字幕图层脱离传统的 CPU 软件栅格化，采用基于 **`wgpu 30.0` + `cosmic-text` + 硬件字形图集（Glyph Atlas Pass）的 GPU 离屏文本着色流水线**：
 
 ```mermaid
 flowchart LR
@@ -17,15 +17,15 @@ flowchart LR
         WordTimings["词级时间戳 (WordTimings)\n[word, start_s, end_s]"]
     end
 
-    subgraph Text_Layout ["排版与字形塑形 (cosmic-text)"]
-        FontSystem["系统字体库加载\n(Windows 字体回退链)"]
+    subgraph Text_Layout ["排版与字形塑形 (cosmic-text 0.12)"]
+        FontSystem["系统与内嵌字体库加载\n(Windows 字体回退链 + 内嵌思源底衬)"]
         Shaper["字形塑形引擎 (HarfBuzz)"]
         LayoutCache["字幕行折叠与断句缓存 (Galley)"]
         WordTimings --> Shaper
         FontSystem --> Shaper --> LayoutCache
     end
 
-    subgraph GPU_Pipeline ["wgpu 30.0 文本渲染流水线 (glyphon)"]
+    subgraph GPU_Pipeline ["wgpu 30.0 文本渲染流水线 (Glyph Atlas Pass)"]
         GlyphAtlas["动态字形图集纹理 (R8Unorm Atlas)"]
         TextPipeline["字幕专用混合渲染通道 (Text Pass)"]
         KaraokeShader["词级卡拉OK高亮与描边着色器 (WGSL)"]
@@ -48,13 +48,13 @@ flowchart LR
 
 ## 2. 字体加载与 CJK 多级回退策略 (Font Fallback)
 
-在中英文混排、特殊符号与口播标点场景下，文本引擎配置严格的 Windows 原生字体回退链，杜绝“豆腐块”缺字现象：
+在中英文混排、特殊符号与口播标点场景下，文本引擎配置严格的 Windows 原生字体回退链，并强制挂载内置开源无衬线字体作为终极保底，杜绝精简版 Windows 系统下的“豆腐块”缺字现象：
 
 ```rust
 pub fn init_subtitle_font_system() -> cosmic_text::FontSystem {
     let mut font_system = cosmic_text::FontSystem::new();
     
-    // 默认首选 Windows 原生无衬线无版权风险字体
+    // 1. 系统原生字体扫描 (按优先级回退)
     let fallback_families = [
         "Microsoft YaHei UI",      // 微软雅黑 (Windows 10/11 原生)
         "Source Han Sans CN",      // 思源黑体
@@ -62,7 +62,12 @@ pub fn init_subtitle_font_system() -> cosmic_text::FontSystem {
         "Segoe UI",                // 英文字母与等宽数字
         "Segoe UI Emoji",          // Emoji 表情符号
     ];
-    // 注册回退链并锁定系统字体扫描
+    
+    // 2. 内嵌字体终极保底 (消除 Windows N / Server 精简版缺字风险)
+    // 静态内置 resources/fonts/NotoSansSC-Medium.subset.otf 作为兜底数据库
+    let bundled_font_bytes = include_bytes!("../../../resources/fonts/NotoSansSC-Medium.subset.otf");
+    font_system.db_mut().load_font_data(bundled_font_bytes.to_vec());
+
     font_system
 }
 ```

@@ -19,7 +19,7 @@
 | **界面流畅度** | 8 轨复杂工程平移/缩放 | **$\ge 60\text{ FPS}$** (无掉帧) | $\ge 50\text{ FPS}$ | egui 帧渲染统计与 wgpu 帧耗时统计 |
 | **高频横向缩放 (Zoom)** | 60min 至 1s 连续缩放往复 | **$\ge 55\text{ FPS}$** | $\ge 50\text{ FPS}$ | 波形 LOD 滞后切换与网格复用压测 |
 | **单帧 UI 细分耗时** | 60min/20轨/2000切片高负荷 | **$\le 1.0\text{ ms}$** | $\le 1.5\text{ ms}$ | egui 单帧布局与网格细分耗时采集 |
-| **空闲待机 CPU 占用率** | 停止播放且无交互 5 秒 (150ms 触发休眠后稳定采样) | **$0.0\%$ (绝对静默)** | $\le 0.1\%$ | Windows 任务管理器单核 CPU 占用采样 |
+| **空闲待机 CPU 占用率** | 停止播放且无交互 5 秒 (150ms 触发休眠后稳定采样) | **$\le 0.1\%$ (均值静默)** | $\le 0.5\%$ | Windows 任务管理器单核 CPU 占用采样 |
 | **播放头拖拽响应** | 拖拽指针到画面更新延迟 | **$\le 25\text{ ms}$** | $\le 35\text{ ms}$ | 1/4 代理激活下高精度时钟捕获 Mouse 到上屏 |
 | **4K NV12 DMA 上传耗时** | 单帧锁页内存直灌 GPU | **$\le 1.0\text{ ms}$** | $\le 1.5\text{ ms}$ | `queue.write_texture` 执行耗时精准采集 |
 | **色彩还原精度 ($\Delta E_{00}$)** | 着色器与 CPU 标杆转码色差 | **$\le 0.5$ (无损)** | $\le 1.0$ | SMPTE 与 ColorChecker 24 色卡自动化比对 |
@@ -103,6 +103,11 @@ flowchart TD
 - 验收指标：
   - 解码管线不得产生死锁（Deadlock）；
   - 内存波动受控，L1 解码环形缓冲池保持 LRU 正确淘汰，显存不得溢出（OOM）。
+
+### 2.3 CI 自动化测试环境兼容与硬件守卫 (CI Environment Guards)
+- 在无物理独显的 GitHub Actions / 云端 Windows Server 虚拟机测试节点上，执行 `cargo test -p clipflow-media --test d3d11va_decode_smoke` 等硬件相关测试时，测试用例必须内置前置探测守卫：
+  - 若调用 Windows DXGI / D3D11 探测不到物理适配器或驱动不支持硬解上下文创建，自动化测试**优雅跳过（Skip）或自动降级验证多线程 CPU 软解回退分支**；
+  - 严禁在无物理 GPU 的基础 CI 节点上因显卡驱动缺失抛出未捕获 panic 导致 CI 门禁误报。全量 D3D11VA 硬解物理验收仅在配备物理 GPU 的 Dedicated Runner 上作为准入条件。
 
 ---
 

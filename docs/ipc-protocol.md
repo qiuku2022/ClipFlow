@@ -16,11 +16,11 @@
 
   - **HyperFrames 动效渲染 Worker**：专注于离屏确定性渲染，通过命名共享内存（零拷贝）直传实时预览帧，离线烘焙模式通过命名管道驱动。
 - **Rust 主进程 (Coordinator)** $\longleftrightarrow$ **Python 智能子进程 (ASR/NLP Worker)**
-  - **信令信道 (信道 A)**：Windows 异步双工命名管道（`\\.\pipe\clipflow-py-{pid}`），采用 Overlapped I/O 与标准换行符分隔的 **JSON-RPC 2.0** 协议，控制往返耗时 RTT $\le 0.35\text{ms}$。
+  - **信令信道 (信道 A)**：Windows 异步双工命名管道（`\\.\pipe\clipflow-py-{pid}`），采用 Overlapped I/O 与严格单行换行符（Newline-Delimited JSON, NDJSON，负载内部 `\n` 强制转义为 `\x0A`）分帧的 **JSON-RPC 2.0** 协议，控制往返耗时 RTT $\le 0.35\text{ms}$。
   - **日志排水管线 (信道 B)**：独立非阻塞管道实时读取子进程标准错误（`stderr`），由 Tokio 异步任务持续流式排空，彻底杜绝 MSVCRT 4KB 块缓冲死锁，并将日志结构化注入 Rust `tracing` 集中落盘。
 - **Rust 主进程 (Coordinator)** $\longleftrightarrow$ **HyperFrames 动效渲染器 (Worker)**
   - 控制信道：CLI 驱动与异步命名管道（`\\.\pipe\clipflow-hf-{pid}`）下发渲染指令。
-  - 像素信道：Windows 命名共享内存（`CreateFileMappingW`）三槽位环形池极速直传 Raw RGBA，单帧 4K 延迟 $\le 1.5\text{ms}$，详见 `hyperframes-spec.md`。
+  - 像素信道：Windows 命名共享内存（`CreateFileMappingW`）三槽位环形池极速直传 Raw RGBA，单帧 4K 总线直传延迟 $\le 1.5\text{ms}$，详见 `hyperframes-spec.md`。
 
 ---
 
@@ -335,8 +335,10 @@
 - 主进程读通道在 **$\le 1.0\text{ms}$** 内捕获 `ErrorKind::BrokenPipe` 或 `ErrorKind::UnexpectedEof`，直接跳过任何超时等待，瞬间触发自愈状态机。
 
 ### 4.2 长任务分片进度租约契约 (Progress Lease)
-- **租约签发**：主进程下发 ASR 或长视频分析任务时，签发初始租约 $L_{\text{expire}} = t_{\text{now}} + W_0$（$W_0 = 3.5\text{s}$）；
-- **动态续约**：子进程采用流式分片模式（约每 2.0s 音频输出一个 `asr.chunk_stream` 流式事件）。主进程每收到一个分片事件，基于当前单片耗时与安全抖动因子（$\alpha = 3.0$）原子更新租约到期时间戳：
+- **双阶段租约签发**：
+  1. **冷启动与权重加载期 ($W_{\text{init}}$)**：主进程拉起 Worker 或首次下发任务时，签发长初始租约 $L_{\text{expire}} = t_{\text{now}} + W_{\text{init}}$（$W_{\text{init}} = 30.0\text{s}$），预留充足裕量供 Python 加载 PyTorch / CTranslate2 并从磁盘读取 1.5GB `large-v2` 权重至显存，彻底防止低配或机械硬盘设备在冷启动阶段被误杀；
+  2. **稳态分片推理期 ($W_{\text{steady}}$)**：收到首个 `asr.chunk_stream` 流式事件或初始化握手响应后，租约切换至稳态模式（基准窗口 $W_0 = 3.5\text{s}$）。
+- **稳态动态续约**：子进程采用流式分片模式（约每 2.0s 音频输出一个 `asr.chunk_stream` 流式事件）。主进程每收到一个分片事件，基于当前单片耗时与安全抖动因子（$\alpha = 3.0$）原子更新租约到期时间戳：
   $$L_{\text{expire}} = t_{\text{now}} + \max(d_{\text{chunk}} \times \text{RTF} \times 3.0 + 1.5\text{s}, \; 2.0\text{s})$$
 - **死锁判定**：后台看门狗每 200ms 执行无锁检查，仅在 $t_{\text{now}} > L_{\text{expire}}$ 时判定为计算挂起/GIL 锁死，死锁误杀率严格为 **$0.0\%$**。
 - **任务取消令牌 (`CancellationToken`)**：用户在界面执行切片或撤销时，主进程发送 `{"jsonrpc": "2.0", "id": "req-cancel", "method": "asr.cancel", "params": {"task_id": "...", "force": false}}`，子进程在 $\le 10\text{ms}$ 内清空当前计算分块并重置租约。

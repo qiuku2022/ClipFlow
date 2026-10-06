@@ -429,6 +429,11 @@ pub struct Clip {
 >      $$t_{\text{source}} = \text{source\_range.start} + (t_{\text{timeline}} - \text{timeline\_range.start}) \times speed$$  
 >    - **倒放 ($speed < 0$)**：取样点以素材出点向入点反向溯源：  
 >      $$t_{\text{source}} = \text{source\_range.end} - (t_{\text{timeline}} - \text{timeline\_range.start}) \times |speed|$$  
+> 3. **三变量调和准则与权威单一源约定 (Three-Variable Reconciliation Rule)**：  
+>    `source_range.duration`、`timeline_range.duration` 与 `speed` 三者紧密关联。为杜绝状态冗余产生的不一致，确立以下权威调和规则：  
+>    - **常规修剪 (Trim / Slip / Ripple)**：`speed` 视为恒定参数。用户拖拽切片边缘改变 `timeline_range.duration` 时，系统依据固定 $speed$ 自动折算并更新 `source_range.duration`；  
+>    - **显式变速 (Speed Dialog)**：用户通过变速对话框主动调整时，显式指定锁定“源范围”或“时间轴范围”之一，重新求值第三项；  
+>    - **工程自检校验**：加载工程或外部交换文件时，以 `source_range` 与 `speed` 为物理基准校验 `timeline_range.duration`，若微差处于 1 帧以内则自动向帧分界点强制吸附对齐。  
 
 /// 片段滤镜与特效实例
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -835,8 +840,43 @@ impl TimelineHistory {
 ### 4.3 自动保存与预写日志 (Auto-Save & WAL)
 
 - **防崩溃日志 (WAL)**：每执行一次 `TimelineCommand`，主进程以追加写入（Append-only）形式向临时工作目录记录 `session.wal`。
+  由于 Rust `Box<dyn TimelineCommand>` 动态分发特质对象无法直接被 `serde` 序列化，系统定义强类型的可序列化载荷枚举 `TimelineCommandPayload`，确保每次提交写操作时能够生成确定性的二进制/JSON 增量帧：
+  ```rust
+  #[derive(Debug, Clone, Serialize, Deserialize)]
+  pub enum TimelineCommandPayload {
+      SplitClip {
+          clip_id: Uuid,
+          cut_point: RationalTime,
+          new_clip_id: Uuid,
+      },
+      RippleDelete {
+          target_clip_id: Uuid,
+          affected_track_ids: Option<Vec<Uuid>>,
+      },
+      MoveClip {
+          clip_id: Uuid,
+          target_track_id: Uuid,
+          target_start: RationalTime,
+      },
+      TrimClipEdge {
+          clip_id: Uuid,
+          new_timeline_range: TimeRange,
+      },
+      Compound {
+          sub_commands: Vec<TimelineCommandPayload>,
+          description: String,
+      },
+  }
+
+  #[derive(Debug, Clone, Serialize, Deserialize)]
+  pub struct WalFrame {
+      pub sequence_number: u64,
+      pub timestamp_ms: i64,
+      pub command: TimelineCommandPayload,
+  }
+  ```
 - **定时全量快照**：每隔 3 分钟后台静默序列化一份全量工程至第一轨本地缓存目录 `.clipflow_cache/{ProjectHash}/autosave/{Name}_{YYYYMMDD_HHMMSS}.clipflow`（详见 [`cache-and-storage-spec.md` 第 2 节](cache-and-storage-spec.md#2-第一轨工程本地缓存规约-clipflow_cache)），最大保留 10 份历史快照。
-- **异常恢复检测**：启动时如检测到异常退出遗留的 WAL 日志，弹出对话框提示用户“检测到未保存的工程修改，是否一键恢复”。
+- **异常恢复检测**：启动时如检测到异常退出遗留的 WAL 日志，弹出对话框提示用户“检测到未保存的工程修改，是否一键恢复”。恢复时基于最近的自动快照重放未提交的 `WalFrame` 流。
 
 ---
 
@@ -911,12 +951,12 @@ $$F_{end}^{(n)} \equiv F_{start}^{(n+1)}$$
 
 ### 5.3 梯次格式导出矩阵
 
-系统确立**“M2 零阻抗切点外发先行 $\to$ M3+ 通用 IR 演进”**的实施矩阵：
+系统确立**“M3 工业级切点外发先行 $\to$ M4+ 通用 IR 演进”**的实施矩阵（v1.0 MVP M0~M2 阶段聚焦于内部时间轴引擎与本地剪辑闭环）：
 
-1. **Milestone 2 (M2) 核心落地**：
+1. **Milestone 3 (M3 远期规划) 核心落地**：
    - **Apple FCP7 XML (`xmeml v5`)**：与 ClipFlow 平行多轨结构 1:1 零阻抗契合，经由 `quick-xml` 流式生成，路径强制规范化为 RFC 3986 `file://localhost/...` 百分号转义 URI，Premiere Pro 与 DaVinci Resolve 导入成功率高达 **99.9%**；
    - **规范化 CMX 3600 EDL**：符合 80 列定宽规范，Reel ID 规约为 8 字符，通过注入 `* FROM CLIP NAME` 与 `* SOURCE FILE` 扩展注释行安全传递 UTF-8 中文长路径，杜绝穿孔卡协议导致的乱码与媒体离线。
-2. **Milestone 3+ (M3+) 架构演进**：
+2. **Milestone 4+ (M4+ 远期规划) 架构演进**：
    - **OpenTimelineIO (OTIO) 通用 IR**：引入好莱坞工业开源内存标准充当中枢适配层，解耦内部数据结构与多格式转换；
    - **FCPX Spine 树投影算法**：实现多轨时间轴向 Apple FCPXML 磁性故事板（`<spine>` + 相对 `offset` + `<gap>` 填充）的降维转换。
 

@@ -18,7 +18,7 @@
 | **Python** | 3.13 | `uv run python --version` | 必须由 `uv` 统一管理，根目录以 `.python-version` 钉住 |
 | **uv** | 最新稳定版 | `uv --version` | 负责 Python 虚拟环境与依赖管理，严禁使用系统 pip |
 | **FFmpeg** | 9.0.2 | `ffmpeg -version` | 严格钉住 9.0.2 版本，用于取帧、静音检测、混音与导出 |
-| **Node.js** | 24 LTS | `node -v` | 负责 `HyperFrames` 动效渲染运行时 |
+| **Node.js** | 24 LTS | `node -v` | **[M4 阶段启用]** 负责 `HyperFrames` 动效渲染运行时；v1.0 MVP (M0~M2) 阶段无需安装 |
 | **ASR 引擎** | faster-whisper 1.2.1 | 模型 `large-v2` | INT8 精度，默认优先 GPU (CUDA)，无 CUDA 自动降级回退 CPU，批大小为 8 |
 
 ---
@@ -46,7 +46,9 @@ uv sync
 > **GPU 加速运行依赖 (CUDA / cuDNN)**：  
 > 若需启用 GPU 极速转写（$\ge 12\times$ 实时倍速），Windows 主机须安装 **CUDA Toolkit 12.x** 与 **cuDNN 9.x for CUDA 12**，并确保 `cudnn64_*.dll` 和 `cublas64_*.dll` 所在目录加入系统 `PATH` 或置于 `resources/cuda_runtime/`；无 CUDA 环境时系统自动降级回退至多线程 CPU 模式。
 
-### 2.3 配置 HyperFrames 动效环境 (Node.js 24)
+### 2.3 [远期规划 - Milestone 4 阶段启用] 配置 HyperFrames 动效环境 (Node.js 24)
+> **阶段说明**：依据 `roadmap.md` 红线，v1.0 MVP (M0~M2) 周期内**严禁引入 npm 与外部动效包**。本步骤仅在进入 Milestone 4 动效包装研发阶段时按需执行。
+
 ```powershell
 # 检查 Node.js 24 LTS 环境
 node -v

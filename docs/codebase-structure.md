@@ -23,18 +23,18 @@ ClipFlow/
 ├── .python-version                  # 严格钉住 Python 3.13
 ├── Cargo.toml                       # Rust 顶层 Workspace 配置
 ├── pyproject.toml                   # Python 3.13 (uv) 依赖声明
-├── package.json                     # Node.js 24 LTS 动效环境配置
+├── package.json                     # [M4 阶段引入] Node.js 24 LTS 动效环境配置
 ├── AGENTS.md                        # 智能体代码工程守则
 ├── docs/                            # 核心规格与架构文档 (SSOT)
 ├── resources/                       # 外部静态资源
-│   ├── hyperframes_templates/       # 预置动效模板库 (HTML/CSS/JS/Anime.js v4.5)
+│   ├── hyperframes_templates/       # [M4 阶段引入] 预置动效模板库 (HTML/CSS/JS/Anime.js v4.5)
 │   └── icons/                       # 界面图标与品牌资产
 │
 ├── crates/                          # Rust 核心工程矩阵 (Cargo Workspace)
 │   ├── clipflow-common/             # 基础元语: 时间码、错误类型、日志定义
 │   ├── clipflow-timeline/           # 纯逻辑时间轴引擎: Project/Sequence/Clip/Undo栈
-│   ├── clipflow-media/              # 多媒体管线: FFmpeg 9.0.2/wgpu纹理/cpal音频/波形
-│   ├── clipflow-ipc/                # 跨进程协调与 Agent 底座: MCP 服务端/rig-core/Python 与 Node 调度
+│   ├── clipflow-media/              # 多媒体管线: FFmpeg 9.0.2/wgpu纹理/cpal与WASAPI音频/波形
+│   ├── clipflow-ipc/                # 跨进程协调底座: Win32命名管道/JobGuard/子进程调度 (M5扩充 rmcp/rig-core)
 │   ├── clipflow-ui/                 # 全局界面: 达芬奇Dock、PR剪辑台、公用时间线视图
 │   └── clipflow-app/                # 桌面主入口: 窗口宿主、主时钟事件循环
 │
@@ -44,7 +44,7 @@ ClipFlow/
 │       ├── nlp/                     # 口播文本断句、停顿与语气词清洗
 │       └── ipc/                     # Named Pipe JSON-RPC 桥接 (Win32 命名管道)
 │
-└── node/
+└── node/                            # [M4 阶段引入]
     └── hyperframes_renderer/        # HyperFrames 离屏动效渲染子进程
         ├── engine/                  # Headless Chromium 虚拟时钟与确定性步进
         └── templates/               # 模板编译器与参数绑定层
@@ -54,19 +54,25 @@ ClipFlow/
 
 ## 2. Rust Workspace 各 Crate 职责边界与依赖拓扑
 
-为了保证系统可测性与高编译并行度，各个 crate 之间遵循**单向无环依赖 (DAG)** 规范：
+为了保证系统可测性与高编译并行度，各个 crate 之间遵循**单向无环依赖 (DAG)** 规范，形成严格的 5 级依赖阶梯：
+- **Level 0 (基础层)**：`clipflow-common`
+- **Level 1 (模型层)**：`clipflow-timeline`
+- **Level 2 (核心领域层)**：`clipflow-media`, `clipflow-ipc` (均单向依赖 `timeline` 与 `common`，互不依赖)
+- **Level 3 (呈现层)**：`clipflow-ui` (依赖 `timeline`, `media`)
+- **Level 4 (宿主层)**：`clipflow-app` (装配 `ui`, `ipc`, `media`)
 
 ```mermaid
 flowchart TD
     App["clipflow-app\n(应用入口 / 窗口生命周期 / 主循环)"]
     UI["clipflow-ui\n(egui 0.36 界面 / PR 分屏 / Dock 栏)"]
     Timeline["clipflow-timeline\n(纯逻辑时间轴模型 / 命令模式 / SSOT)"]
-    Media["clipflow-media\n(FFmpeg 9.0.2 / wgpu 30.0 / cpal 音频)"]
-    IPC["clipflow-ipc\n(Director Agent Harness / MCP / 子进程调度)"]
+    Media["clipflow-media\n(FFmpeg 9.0.2 / wgpu 30.0 / WASAPI 原生时钟 / cpal)"]
+    IPC["clipflow-ipc\n(子进程调度 / 命名管道 / [M5] rmcp / rig-core)"]
     Common["clipflow-common\n(RationalTime / 错误码 / 共享类型)"]
 
     App --> UI
     App --> IPC
+    App --> Media
     UI --> Timeline
     UI --> Media
     Media --> Timeline
@@ -81,10 +87,9 @@ flowchart TD
 | Crate 标识 | 依赖外部核心库 | 核心职责与边界 |
 | :--- | :--- | :--- |
 | **`clipflow-common`** | `serde`, `uuid`, `thiserror` | 亚毫秒 `RationalTime`、`TimeRange`、SMPTE 时间码、系统统一 `Result<T, ClipFlowError>`。绝不依赖渲染和媒体库。 |
-| **`clipflow-timeline`**| `clipflow-common`, `zstd`, `quick-xml` | `Project`, `Sequence`, `Track`, `Clip`, `Keyframe` 数据模型；`TimelineCommand` 命令栈（Undo/Redo）；`.clipflow` 序列化与反序列化；`TimelineExporter` 外部工程导出标准 Trait、`CutList` 一维切点抽取与有理数整除帧对齐引擎、Apple FCP7 XML (`xmeml v5`) 与规范化 CMX 3600 EDL 流式序列化器、`ConformInspector` 静态合规与降级诊断扫描器，以及面向 M3+ 的 OpenTimelineIO (OTIO) 通用 IR 中枢。纯数据与状态机，无 GUI 依赖。 |
-| **`clipflow-media`** | `clipflow-common`, `clipflow-timeline`, `ffmpeg-sys-next` (9.0.2), `wgpu` 30.0, `cosmic-text` 0.12, `glyphon` 0.5, `cpal`, `windows` | 视频硬解（D3D11VA）、锁页环形帧池（`PinnedFramePool`）、NV12 双平面极速上传、WGSL 全色域色彩矩阵着色器、监视器自适应下采样（`ProxyGovernor`）、基于 `cosmic-text` 与 `glyphon` 的 GPU 离屏文本与 WGSL SDF 圆角胶囊底板着色管线（`SubtitleBoxPass`）、词级卡拉OK点亮、WASAPI 硬件 DAC 时钟锚定、`MonotonicClampedClock` 无锁单调箝位外推主时钟、双阈值迟滞渲染调度（`HysteresisSyncComparator`）、波形峰值文件 (`.peak`) 生成、Windows 命名共享内存 Raw RGBA 消费器（`SharedMemoryConsumer`）、动效帧完成账本（`FrameLedger`）与多媒体三级容灾看门狗。单向依赖 `clipflow-timeline` 获取片段区间模型与动效图层参数，无循环依赖。 |
-| **`clipflow-ipc`** | `clipflow-common`, `clipflow-timeline`, `tokio`, `serde_json`, `interprocess`, `windows-sys`, `rmcp`, `rig-core` | 管理 Python (`uv`) 和 Node.js 子进程生命周期；承载基于 `rmcp` 的 Model Context Protocol (MCP) 服务端与 `rig-core` 统一大模型驱动的 Director Agent Harness 运行底座；单向依赖 `clipflow-timeline` 维护 Shadow Timeline 内存虚拟沙箱与即时度量反馈闭环；Windows 内核级 `JobGuard` 作业对象强绑定（`KILL_ON_JOB_CLOSE` 零孤儿逃逸）；Windows 异步双工命名管道驱动（`\\.\pipe\clipflow-*` JSON-RPC 2.0）；子进程 `stderr` 独立异步非阻塞排水管线（`AsyncStderrDrainer` 消除 4KB 缓冲死锁）；双轨看门狗（0ms 物理 BrokenPipe 即时捕获 + 分片任务进度租约 `ProgressLeaseTracker`）；三级容灾自愈状态机（`FallbackGovernor`: L1 重试 $\to$ L2 CUDA OOM/驱动缺失自愈降级 CPU $\to$ L3 熔断隔离）；跨语言 ASR 服务契约抽象（`AsrWorkerProvider`）与纯内存测试桩（`MockAsrWorker`）。 |
-
+| **`clipflow-timeline`**| `clipflow-common`, `zstd`, `quick-xml` | `Project`, `Sequence`, `Track`, `Clip`, `Keyframe` 数据模型；`TimelineCommand` 命令栈（Undo/Redo）；`.clipflow` 序列化与反序列化；`TimelineExporter` 外部工程导出标准 Trait、`CutList` 一维切点抽取与有理数整除帧对齐引擎、Apple FCP7 XML (`xmeml v5`) 与规范化 CMX 3600 EDL 流式序列化器（M3 落地）、`ConformInspector` 静态合规与降级诊断扫描器，以及面向 M4+ 的 OpenTimelineIO (OTIO) 通用 IR 中枢。纯数据与状态机，无 GUI 依赖。 |
+| **`clipflow-media`** | `clipflow-common`, `clipflow-timeline`, `ffmpeg-sys-next` (9.0.2), `wgpu` 30.0, `cosmic-text` 0.12, `glyphon` (wgpu 30 兼容版本), `cpal`, `windows` | 视频硬解（D3D11VA）、锁页环形帧池（`PinnedFramePool`）、NV12 双平面极速上传、WGSL 全色域色彩矩阵着色器、监视器自适应下采样（`ProxyGovernor`）、基于 `cosmic-text` 与 GPU 着色管线的离屏文本与 WGSL SDF 圆角胶囊底板着色管线（`SubtitleBoxPass`）、词级卡拉OK点亮、WASAPI 原生硬件 DAC 时钟锚定（主时钟权威）、`MonotonicClampedClock` 无锁单调箝位外推主时钟、双阈值迟滞渲染调度（`HysteresisSyncComparator`）、波形峰值文件 (`.peak`) 生成、Windows 命名共享内存 Raw RGBA 消费器（`SharedMemoryConsumer`，M4 启用）、动效帧完成账本（`FrameLedger`）与多媒体三级容灾看门狗。单向依赖 `clipflow-timeline` 获取片段区间模型与动效图层参数，无循环依赖。 |
+| **`clipflow-ipc`** | `clipflow-common`, `clipflow-timeline`, `tokio`, `serde_json`, `interprocess`, `windows-sys` (M5扩充: `rmcp`, `rig-core`) | 管理 Python (`uv`) 和 Node.js 子进程生命周期；Windows 内核级 `JobGuard` 作业对象强绑定（`KILL_ON_JOB_CLOSE` 零孤儿逃逸）；Windows 异步双工命名管道驱动（`\\.\pipe\clipflow-*` JSON-RPC 2.0）；子进程 `stderr` 独立异步非阻塞排水管线（`AsyncStderrDrainer` 消除 4KB 缓冲死锁）；双轨看门狗（0ms 物理 BrokenPipe 即时捕获 + 分片任务进度租约 `ProgressLeaseTracker`）；三级容灾自愈状态机（`FallbackGovernor`: L1 重试 $\to$ L2 CUDA OOM/驱动缺失自愈降级 CPU $\to$ L3 熔断隔离）；跨语言 ASR 服务契约抽象（`AsrWorkerProvider`）与纯内存测试桩（`MockAsrWorker`）。M5 阶段在此基础上承载基于 `rmcp` 的 MCP 服务端与 `rig-core` 统一大模型驱动的 Director Agent Harness 运行底座。 |
 | **`clipflow-ui`** | `egui` 0.36, `egui_wgpu`, `winit` | 达芬奇底部 6 大分页 Dock 栏切换、PR 剪辑四区分屏、文本驱动剪辑双模联动交互状态机（Ripple Cut / In-Place Typo Correction）、全局公用时间线视图渲染、关键帧曲线编辑器、导出合规与降级诊断看板（`DiagnosticReport`）、Neutral Modern 深色主题映射（深岩灰 `#0F1115`、表面 `#171A21`、钴蓝 `#2F6FEB`、12/8/4px 几何圆角梯队）。 |
 | **`clipflow-app`** | `eframe` 0.36, `tracing` | 应用程序 `main()` 入口、跨模块依赖注入、全局状态根 (`AppState`) 托管、系统托盘与异常捕获。 |
 
