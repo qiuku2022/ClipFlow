@@ -124,20 +124,22 @@ flowchart TD
   - **前置依赖**：M0-T02
   - **涉改模块**：`crates/clipflow-timeline/`
   - **对应规范**：[timeline-data-model.md 第 2 节与第 4 节](timeline-data-model.md)
-  - **核心交付物**：实现 `Project`, `Sequence`, `Track`, `Clip` 领域模型，明确划分视频轨、音频轨、字幕轨；实现工程快照保存与读取，支持 Zstandard 压缩的 `.clipflow` 本地序列化与反序列化。
+  - **核心交付物**：实现 `Project`, `Sequence`, `Track`, `Clip` 领域模型，明确划分视频轨、音频轨、字幕轨；实现 `TimelineSnapshot` 只读快照与专供沙箱推演的 `DraftTimeline` 实体；实现工程快照保存与读取，支持 Zstandard 压缩的 `.clipflow` 本地序列化与反序列化。
   - **验收命令 (DoD)**：
     ```powershell
     cargo test -p clipflow-timeline --test model_serialization
+    cargo test -p clipflow-timeline --test draft_sandbox_isolation
     ```
 
 - [ ] **M1-T02 命令模式剪辑事务栈与 Undo/Redo (`clipflow-timeline`)**
   - **前置依赖**：M1-T01
   - **涉改模块**：`crates/clipflow-timeline/`
   - **对应规范**：[timeline-data-model.md 第 3 节](timeline-data-model.md)
-  - **核心交付物**：实现 `TimelineCommand` 特质，落地 `SplitClipCommand`（剃刀分割）、`RippleDeleteCommand`（波纹删除）、`MoveClipCommand`（片段移动）与 `TimelineHistory` 撤销/重做栈。
+  - **核心交付物**：实现 `TimelineCommand` 特质，落地 `SplitClipCommand`（剃刀分割）、`RippleDeleteCommand`（波纹删除）、`MoveClipCommand`（片段移动）；实现 `apply_transaction` 批量事务提交（将 `DraftTimeline` 的整批操作打包为单一 `CompoundCommand` 压入 `TimelineHistory`），保证单次 `Ctrl + Z` 完全回退。
   - **验收命令 (DoD)**：
     ```powershell
     cargo test -p clipflow-timeline --test command_undo_redo
+    cargo test -p clipflow-timeline --test atomic_transaction_undo
     ```
 
 - [ ] **M1-T03 FFmpeg 9.0.2 D3D11VA 硬件解码与锁页帧池 (`clipflow-media`)**
@@ -287,6 +289,8 @@ flowchart TD
 ### Milestone 3 (远期规划)：工业级工程互导与硬件加速母带导出 (Target Release: v0.2.0)
 - **定位**：支持视频母带渲染与行业级非编剪辑工程互导。
 - **核心待办**：
+  - 剪映 / CapCut 标准草稿 (`draft_content.json`) 序列化器与微秒时钟映射（借力大众生态花字与特效）
+  - Apple FCPXML 1.10 DTD 规范导出器（支持无缝送入 DaVinci Resolve 与 Final Cut Pro 现代版本）
   - Apple FCP7 XML (`xmeml v5`) 流式序列化器
   - 规范化 CMX 3600 EDL 流式生成器
   - `ConformInspector` 静态合规预检与降级诊断扫描器
@@ -305,7 +309,10 @@ flowchart TD
 - **定位**：引入导演级 AI 智能体辅助与全自动粗剪工作流。
 - **核心待办**：
   - 基于 `rmcp` 进程内总线与 `rig-core` 的 Agent Harness 运行时底座
-  - Shadow Timeline 虚拟沙箱即时反馈与轻量状态比对
+  - 基于 MCP `tools/list_changed` 的渐进式工具暴露（Progressive Tool Exposure）与单入口 Skill 体系
+  - 系统提示词物理前缀缓存编排（Prompt Prefix-Cache Partitioning，静态规则置顶、动态状态置底）
+  - 会话历史长上下文治理与陈旧工具输出单行桩化（`HistoryCompactor` 与 Stale Result Stubbing）
+  - Shadow Timeline 虚拟沙箱即时反馈与 `DraftTimeline` 事务提交状态机
   - 智能粗剪 Agent：基于口播断句与气口分析的自动化 A-Roll 粗剪
   - 智能包装 Agent：依据语义自动下发动效与字幕高亮策略
 

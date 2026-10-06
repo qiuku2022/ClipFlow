@@ -304,6 +304,15 @@ flowchart TD
 - **背压控制 (Backpressure)**：GPU 合成帧率与 NVENC 编码吞吐量严格保持流控队列深度 $\le 3$，防止内存无限制溢出。
 - **色彩空间一致性**：导出渲染通道强制使用 Rec.709 全范围（Full Range）或限制范围（Limited Range，TV标准），与节目监视器预览所见即所得。
 
+### 5.2 零渲染工程草稿导出通道 (Zero-Render Draft Export Channel)
+
+并非所有分发场景都需要耗时的像素重编码。ClipFlow 原生规划基于 `clipflow-timeline` 的**零渲染工程草稿直出通道**：
+- **剪映 / CapCut 草稿通道 (`draft_content.json`)**：
+  - 彻底规避音视频像素重采样与编解码，直接将时间线的有理数帧映射为剪映微秒级轨道与片段引用；
+  - 导出耗时 $\le 100\text{ms}$，生成的工程文件可直接被剪映桌面端识别打开，实现“ClipFlow 负责极速粗剪与对位，剪映负责挂载大众流行贴纸与特效”的混合生产力闭环。
+- **专业 NLE 互导通道 (FCPXML 1.10 / CMX 3600 EDL)**：
+  - 原地引用原始素材媒体，生成标准 XML/EDL 交付文件，零损耗直通 DaVinci Resolve 与 Final Cut Pro。
+
 ---
 
 ## 6. 多媒体管线三级容灾降级与 DeviceLost 自愈状态机

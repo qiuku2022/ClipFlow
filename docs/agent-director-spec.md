@@ -126,13 +126,19 @@ flowchart TD
 - **Reasoning / Thinking 连续性保证**：
   在对接 DeepSeek-R1 或 Claude 3.7 Thinking 模式时，多轮 Tool Calling 交互中 Harness **强制将上一轮返回的 `thinking` 块原样透传回大模型上下文**，严禁丢弃思考链，确保模型推理链条完整不漂移。
 
-### 2.2 上下文滚动治理 (Context Compaction & Pruning)
+### 2.2 上下文滚动治理与陈旧工具输出单行桩化 (Context Compaction & Stale Result Stubbing)
 
-长任务 Agent 会产生海量的只读查询输出（如几千条时间戳信息），极易引发**上下文毒化（Context Poisoning）**与推理迟钝。ClipFlow Harness 引入自动上下文修剪治理机制：
+长任务 Agent 会产生海量的只读查询输出（如几千条时间戳信息），极易引发**上下文毒化（Context Poisoning）**与推理迟钝。ClipFlow Harness 引入自动上下文修剪与陈旧输出单行桩化治理机制：
 
-1. **工具执行结果修剪 (Tool Execution Output Pruning)**：
-   - 当多轮会话产生新的剪辑决策时，前序轮次中调用 `timeline_inspect_range` 或 `timeline_query_candidates` 返回的庞大原始 JSON 列表被 Harness **自动折叠为摘要哈希锚点**（如 `[已折叠 128 条气口查询结果，时间段 00:00-05:00，状态哈希 #A8F2]`）；
-   - 仅保留当前最新一轮工具调用的完整出参，使得上下文长度稳定在“智能甜点区（Smart Zone，$\le 30\text{k}$ tokens）”。
+1. **陈旧工具结果单行桩化 (Stale Tool Result Stubbing)**：
+   - **量化触发准则**：
+     - `STALE_TOOL_RESULT_AGE = 5`（距离当前最新轮次超过 5 轮的历史工具返回）；
+     - `STALE_TOOL_RESULT_MIN_CHARS = 2000`（字符量超过 2000 的大体积载荷，如 `timeline_inspect_range`、Whisper 词级 JSON 或 `probe_media` 探测体）。
+   - **单行桩替换逻辑**：满足条件的工具返回，被 `HistoryCompactor` 强制压缩为 1 行轻量摘要桩（Zero LLM Cost），例如：
+     ```text
+     [ToolResult Turn #2 compacted: timeline_inspect_range returned 128 clips across 4 tracks, sha256: #A8F2]
+     ```
+   - **持久层追溯**：原始大体积载荷按 SHA-256 存入本地轻量数据库，Agent 若需要重新审阅历史细节，可通过 `read_agent_artifact` 显式定向回捞。
 2. **Scratchpad 状态缓存**：
    - 跨多轮会话的剪辑目标、已采纳决议与用户特定偏好被提炼至 Harness 的 `WorkingMemoryScratchpad`，作为置顶系统状态注入，无需在对话历史中反复重述。
 
@@ -209,6 +215,36 @@ pub struct SemanticChapterSummary {
     pub token_estimate: u32,
 }
 ```
+
+### 2.6 系统提示词物理前缀缓存（Prompt Prefix-Cache）严格分区规范
+
+现代大语言模型（Anthropic Prompt Caching、DeepSeek/OpenAI/Qwen 的 KV-Cache）均强依赖**按字节精确匹配的静态前缀**。在长达数十轮的剪辑微调中，如果系统提示词中间插入了一个动态变化的播放头秒数或帧数，整个前缀缓存瞬间击穿，推理成本与首字延迟暴增 5~10 倍。
+
+ClipFlow Harness 确立严格的代码纪律：**所有动态变量与易变时间线状态，必须强制物理追加在 System Prompt 的最后一个字节处**。
+
+```rust
+/// 提示词装配铁律：静态段严格在前，易变段绝对沉底
+pub fn assemble_system_prompt(static_preamble: &str, volatile_timeline_state: &str) -> String {
+    format!("{}{}", static_preamble, volatile_timeline_state)
+}
+```
+
+#### 分区排布物理布局
+```
++-------------------------------------------------------------------------+
+| [分区 1: 绝对静态前缀 (Static Preamble)] - 享受 100% KV-Cache 命中         |
+| 1. 导演角色定义与专业审美风格指引                                       |
+| 2. 交互底线：严禁私自越权修改原生时间线，必须遵循 Propose-Apply 契约      |
+| 3. 可用领域技能 (Skills) 索引与引导工具定义                              |
+| 4. 领域术语表与物理约束 (SMPTE、有理数时间、音量范围)                      |
++-------------------------------------------------------------------------+
+| [分区 2: 动态时间线物理快照 (<timeline_state>)] - 严格沉底至尾部          |
+| 1. 当前序列基本属性: canvas, fps, duration, tracks 概览                 |
+| 2. 紧凑片段列表: [id_8] Track ClipName @start +duration (最多 60 项)    |
+| 3. 资产池摘要: Video 3x, Audio 2x, Subtitle 1x                          |
++-------------------------------------------------------------------------+
+```
+*在整个 Agent 会话持续进行的 20~50 轮工具迭代中，前序数万 Token 的静态前缀由于位置和内容完全锁定，在各模型厂商侧直接命中已存缓存，平均首 Token 延迟由 2.5s 压降至 0.25s。*
 
 ---
 
@@ -440,9 +476,35 @@ impl TimelineMcpServer {
 
 ---
 
-### 3.4 Shadow Timeline 虚拟沙箱即时反馈数据结构
+### 3.4 基于 MCP `tools/list_changed` 的渐进式工具暴露 (Progressive Tool Exposure)
 
-写工具在沙箱中求值后返回给大模型的 `SandboxExecutionFeedback`，形成真正的闭环观测：
+为防止将 40+ 个底层工具一次性倾倒给大模型造成 Token 浪费与工具幻觉，`clipflow-ipc` 的 MCP 服务端严格推行**三级漏斗渐进暴露机制**：
+
+```mermaid
+flowchart TD
+    Boot["1. 冷启动 (Boot Phase)\n默认仅暴露 5 个基础引导工具"]
+    Route["2. 领域路由 (load_skill)\nAgent 调用 load_skill('pacing')"]
+    Notify["3. 动态推送 (tools/list_changed)\nrmcp 协议广播工具列表变更"]
+    Active["4. 专属工具激活 (Active Phase)\n解锁特定领域高阶剪辑工具"]
+
+    Boot --> Route --> Notify --> Active
+```
+
+1. **默认引导工具集 (Boot Tools，仅 5 个)**：
+   - `tool_search`：按自然语言语义检索系统工具库；
+   - `load_skill`：加载特定领域工作流技能包；
+   - `read_timeline`：读取当前序列轨道与片段概览；
+   - `read_project`：读取项目资产与序列配置；
+   - `begin_edit_session`：启动带事务保护的编辑会话。
+2. **领域技能按需展开 (Dynamic Skill Activation)**：
+   - 当 Agent 调用 `load_skill("audio_ducking")` 时，宿主根据领域 Skill 依赖表，动态激活配乐与降音工具；
+   - 宿主通过 `rmcp` 发送 MCP 标准规范中的 `notifications/tools/list_changed`，促使 Claude Code / Cursor 等外部或内置客户端动态刷新工具定义，实现工具面平滑伸缩。
+
+---
+
+### 3.5 Shadow Timeline 虚拟沙箱即时反馈数据结构 (物理映射为 `DraftTimeline`)
+
+写工具在沙箱中求值（底层统一运行在 `clipflow-timeline` 的 `DraftTimeline` 实体上，详见 timeline-data-model.md 第 2.6 节）后返回给大模型的 `SandboxExecutionFeedback`，形成真正的闭环观测：
 
 ```rust
 use serde::{Deserialize, Serialize};
@@ -490,7 +552,7 @@ pub enum SandboxWarningCode {
 
 ---
 
-### 3.5 分阶段执行图 (Staged DAG Compiler) 与原子提交机制
+### 3.6 分阶段执行图 (Staged DAG Compiler) 与原子提交机制
 
 当创作者在 UI 审查 Ghost Layer 虚拟投影并点击【★ 一键采纳落地】后，主进程 Staged DAG 编译器负责将沙箱方案编译落地至真实的 Rust 公用时间线（SSOT）：
 

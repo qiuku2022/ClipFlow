@@ -703,6 +703,83 @@ pub struct AgentUserPreferences {
 ```
 *注：内存常驻的 `TimelineMemoryIndex`（包含时序声学物理锚点、分幕缓存与负样本指纹，详见 agent-director-spec.md 第 2.5 节）在落盘时将其语义分段摘要与负样本切点签名沉淀映射至 `AgentProjectSession`（`cached_outline` 与 `rejected_cut_hashes`），确保工程重开时零 Token 损耗还原记忆上下文。该字段随 `Project` 一并序列化至 `.clipflow` 容器内部，经 Zstandard 压缩存储，体积增加小于 15KB，但在异机迁移和重新打开时能够实现 100% 完整的 Agent 会话与剪辑方案还原。*
 
+### 2.6 不可变时间线快照与草稿沙箱 (`TimelineSnapshot` & `DraftTimeline`)
+
+为了彻底杜绝外部 Agent、内置协调器或复杂交互中途由于报错、网络中断或 Token 超限导致的“时间轴半残破损与脏读脏写”，系统确立**“提案制沙箱（Propose-Apply）”核心契约**：
+
+```mermaid
+flowchart LR
+    LiveSequence["原生时间线 Sequence (SSOT)"] -->|只读快照 clone / Arc| Snapshot["TimelineSnapshot (不可变)"]
+    Snapshot -->|作为底模基准| Draft["DraftTimeline 沙箱 (内存推演)"]
+    Agent["Agent / 交互操作"] -->|执行工具并记录命令| Draft
+    Draft -->|累积产出| Cmds["Vec<TimelineCommand> (原子事务)"]
+    UserApprove["用户审查批准 / auto-apply"] -->|apply_transaction| LiveSequence
+    Cmds --> UserApprove
+```
+
+```rust
+use std::sync::Arc;
+
+/// 全局只读时间线快照（轻量、线程安全，供播放器、波形与 UI 零拷贝并发消费）
+#[derive(Debug, Clone)]
+pub struct TimelineSnapshot {
+    pub sequence_id: Uuid,
+    pub revision: u64,
+    pub inner: Arc<Sequence>,
+}
+
+impl TimelineSnapshot {
+    pub fn new(sequence: &Sequence, revision: u64) -> Self {
+        Self {
+            sequence_id: sequence.id,
+            revision,
+            inner: Arc::new(sequence.clone()),
+        }
+    }
+}
+
+/// 专供 Agent 推演、多步复合操作与模拟剪辑的内存草稿沙箱
+pub struct DraftTimeline<'a> {
+    /// 派生时的基准快照，用于检测版本漂移 (Stale Check)
+    base_snapshot: &'a TimelineSnapshot,
+    /// 暂存的推演状态副本（对 Sequence 局部进行修改，不碰全局 SSOT）
+    staged_sequence: Sequence,
+    /// 该沙箱生命周期内执行的所有原子命令序列（Replay 账本）
+    recorded_commands: Vec<Box<dyn TimelineCommand>>,
+}
+
+impl<'a> DraftTimeline<'a> {
+    pub fn new(base: &'a TimelineSnapshot) -> Self {
+        Self {
+            base_snapshot: base,
+            staged_sequence: (*base.inner).clone(),
+            recorded_commands: Vec::new(),
+        }
+    }
+
+    /// 在沙箱中尝试执行单条命令（立即反映到 staged_sequence，供后续工具自检观测）
+    pub fn execute_staged<C: TimelineCommand + 'static>(&mut self, mut command: C) -> Result<(), CommandError> {
+        command.execute(&mut self.staged_sequence)?;
+        self.recorded_commands.push(Box::new(command));
+        Ok(())
+    }
+
+    /// 提取出全部记录的命令账本（移出所有权，供主时间线一次性原子提交）
+    pub fn take_commands(&mut self) -> Vec<Box<dyn TimelineCommand>> {
+        std::mem::take(&mut self.recorded_commands)
+    }
+
+    /// 获取当前的暂存序列视图（用于即时度量评估、幽灵图层预览或抽帧观测）
+    pub fn staged_sequence(&self) -> &Sequence {
+        &self.staged_sequence
+    }
+
+    /// 校验沙箱是否已过期（若原生序列的版本号已被手动编辑推进，则拒绝盲目合入）
+    pub fn is_stale(&self, current_live_revision: u64) -> bool {
+        self.base_snapshot.revision != current_live_revision
+    }
+}
+```
 
 ---
 
@@ -802,8 +879,41 @@ impl TimelineHistory {
             Ok(false)
         }
     }
+
+    /// 原子应用整批命令事务，并将其压入单一 Undo 栈节点
+    pub fn apply_transaction(
+        &mut self,
+        commands: Vec<Box<dyn TimelineCommand>>,
+        desc: &'static str,
+        sequence: &mut Sequence,
+    ) -> Result<(), CommandError> {
+        if commands.is_empty() {
+            return Ok(());
+        }
+
+        let mut compound = CompoundCommand {
+            commands,
+            desc,
+        };
+
+        // 一次性顺序执行批次内的所有子命令
+        compound.execute(sequence)?;
+
+        // 作为一个整体节点推入撤销栈
+        self.undo_stack.push(Box::new(compound));
+        if self.undo_stack.len() > self.max_depth {
+            self.undo_stack.remove(0);
+        }
+        self.redo_stack.clear();
+        Ok(())
+    }
 }
 ```
+
+### 3.4 批量事务执行与单步撤销保证
+
+当 Agent 导演通过 `DraftTimeline` 提交一整组切分、调色、字幕重排等复合操作时，若按传统模式逐一入栈，撤销栈将产生数十个碎屑步骤，用户按 `Ctrl + Z` 将陷入漫长且中间状态破损的单步回滚。  
+通过 `apply_transaction`，系统把全部子命令整体装配进单个 `CompoundCommand` 中执行并压栈。**用户仅需按一次 `Ctrl + Z`，即可无缝完全撤销一整组复合剪辑修改**，实现最高等级的心理安全感与操作可控性。
 
 ---
 
@@ -954,6 +1064,14 @@ $$F_{end}^{(n)} \equiv F_{start}^{(n+1)}$$
 系统确立**“M3 工业级切点外发先行 $\to$ M4+ 通用 IR 演进”**的实施矩阵（v1.0 MVP M0~M2 阶段聚焦于内部时间轴引擎与本地剪辑闭环）：
 
 1. **Milestone 3 (M3 远期规划) 核心落地**：
+   - **剪映 / CapCut 标准草稿 (`draft_content.json`)**：
+     - **业务价值**：彻底打破开源 NLE 早期缺少海量大众贴纸、花字与爆款特效的冷启动短板。让 ClipFlow 的高性能 Rust 引擎与 Agent 负责听声音、删停顿、对节奏与排粗剪，随后一键直接导出剪映本地工程；
+     - **时间戳投影铁律**：剪映草稿内部时间轴基准固定为**微秒刻度 ($1\text{s} = 1,000,000\mu\text{s}$)**。转换时调用有理数精确折算：
+       $$T_{\mu s} = \frac{\text{RationalTime.value} \times 1,000,000}{\text{RationalTime.timescale}}$$
+     - **多轨数据对齐**：视频轨道映射至 `tracks[type="video"]`，多轨音频映射至 `tracks[type="audio"]`，口播字幕（`C1` 轨）映射至剪映的独立文本轨 `tracks[type="text"]`（含词级样式、描边与底板颜色），片段入出点 `source_timerange` 与 `target_timerange` 严格对齐微秒刻度，用户在剪映中双击工程即可零缝隙无缝接续；
+   - **Apple FCPXML 1.10 DTD 规范导出**：
+     - 严格依照 Apple FCPXML 1.10 DTD 规范输出，消除旧版 FCP7 XML 在现代 Final Cut Pro 与 DaVinci Resolve 中的兼容警报；
+     - 原地引用导入媒体必须指向真实文件 URI（严禁手写非法 `<pathurl>`），连带故事线（Connected Storylines）与变速片段严格依照有理数帧率采样，确保 Resolve 能 100% 自动关联摄影机原始素材；
    - **Apple FCP7 XML (`xmeml v5`)**：与 ClipFlow 平行多轨结构 1:1 零阻抗契合，经由 `quick-xml` 流式生成，路径强制规范化为 RFC 3986 `file://localhost/...` 百分号转义 URI，Premiere Pro 与 DaVinci Resolve 导入成功率高达 **99.9%**；
    - **规范化 CMX 3600 EDL**：符合 80 列定宽规范，Reel ID 规约为 8 字符，通过注入 `* FROM CLIP NAME` 与 `* SOURCE FILE` 扩展注释行安全传递 UTF-8 中文长路径，杜绝穿孔卡协议导致的乱码与媒体离线。
 2. **Milestone 4+ (M4+ 远期规划) 架构演进**：
