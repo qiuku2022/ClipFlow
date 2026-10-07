@@ -1,7 +1,7 @@
 # 工程研发路线图与原子任务看板 (Development Roadmap & Task Board)
 
 > **版本**：v0.3.0 (v1.0 MVP: 剪辑工作台与语音转字幕纯净收敛版)  
-> **更新时间**：2026-10-05  
+> **更新时间**：2026-10-07  
 > **适用技术栈**：Rust 1.99, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), FFmpeg 9.0.2, faster-whisper 1.2.1  
 > **状态索引**：`[ ]` 待开始 | `[/]` 进行中 | `[x]` 已完成并通过验收 | `[-]` 已废弃/跳过  
 > **当前活动里程碑**：**Milestone 0 (M0)**  
@@ -290,7 +290,7 @@ flowchart TD
 
 > **规划说明**：以下里程碑在 v1.0 研发周期内**不启动、不编写代码**，仅作为架构向后兼容与演进预留之单一事实记录。
 
-### Milestone 3 (远期规划)：工业级工程互导与硬件加速母带导出 (Target Release: v0.2.0)
+### Milestone 3 (远期规划)：工业级工程互导与硬件加速母带导出 (Target Release: v0.4.0)
 - **定位**：支持视频母带渲染与行业级非编剪辑工程互导。
 - **核心待办**：
   - 剪映 / CapCut 标准草稿 (`draft_content.json`) 序列化器与微秒时钟映射（借力大众生态花字与特效）
@@ -301,7 +301,7 @@ flowchart TD
   - 工业字幕格式导出 (`.srt` / `.vtt`)
   - FFmpeg NVENC/QSV/AMF 硬件加速视频压制管线与 Deliver 导出面板
 
-### Milestone 4 (远期规划)：HyperFrames 离屏动效包装与模板引擎 (Target Release: v0.3.0)
+### Milestone 4 (远期规划)：HyperFrames 离屏动效包装与模板引擎 (Target Release: v0.5.0)
 - **定位**：集成 Web 级高保真动态图层包装。
 - **核心待办**：
   - Node.js 24 LTS 与 Headless Chromium 离屏虚拟时钟运行时搭建
@@ -309,7 +309,7 @@ flowchart TD
   - Windows 命名共享内存（`SharedMemoryConsumer`）Raw RGBA 零拷贝回传直灌
   - 双 Chromium Worker 乒乓池调度与显存配额硬限制（$\le 1.2\text{GB}$）
 
-### Milestone 5 (远期规划)：现代 Agent Harness 与自动化剪辑智能体 (Target Release: v0.4.0)
+### Milestone 5 (远期规划)：现代 Agent Harness 与自动化剪辑智能体 (Target Release: v0.6.0)
 - **定位**：引入导演级 AI 智能体辅助与全自动粗剪工作流。
 - **核心待办**：
   - 基于 `rmcp` 进程内总线与 `rig-core` 的 Agent Harness 运行时底座
@@ -320,7 +320,7 @@ flowchart TD
   - 智能粗剪 Agent：基于口播断句与气口分析的自动化 A-Roll 粗剪
   - 智能包装 Agent：依据语义自动下发动效与字幕高亮策略
 
-### Milestone 6 (远期规划)：多模态声音与图像扩展工作流 (Target Release: v0.5.0)
+### Milestone 6 (远期规划)：多模态声音与图像扩展工作流 (Target Release: v0.7.0)
 - **定位**：补全声音调音台与图像封面制作多模态页面。
 - **核心待办**：
   - 声音工作流：多轨混音台、AI 降噪、TTS 语音合成与声音克隆

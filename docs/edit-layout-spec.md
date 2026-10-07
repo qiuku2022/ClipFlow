@@ -1,7 +1,7 @@
 # 剪辑工作台界面布局规范 (Edit Layout Specification)
 
-> **版本**：v0.2.0  
-> **更新时间**：2026-10-05  
+> **版本**：v0.3.0  
+> **更新时间**：2026-10-07  
 > **适用技术栈**：Rust 1.99, egui 0.36, wgpu 30.0, FFmpeg 9.0.2, Neutral Modern Dark  
 > **核心地位**：依据 Adobe Premiere Pro 经典四区分屏格局，规范 ClipFlow 剪辑主工作台网格拓扑、视窗尺寸约束、公用时间线交互与状态机联动。
 

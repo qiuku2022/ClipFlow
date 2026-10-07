@@ -1,7 +1,7 @@
 # 导演级 Agent 协议与剪辑指令集规范 (Agent Director & Tool Calling Specification)
 
-> **版本**：v0.2.0 (Modern Agent Harness & MCP Protocol)  
-> **更新时间**：2026-10-05  
+> **版本**：v0.3.0 (Modern Agent Harness & MCP Protocol)  
+> **更新时间**：2026-10-07  
 > **适用技术栈**：Rust 1.99 (Host), Tokio, `rmcp` (官方 MCP Rust SDK), `rig-core` (LLM 统一客户端与工具绑定), Python 3.13 (`uv`), faster-whisper 1.2.1  
 > **核心地位**：定义 ClipFlow 核心差异化特色——“导演级 Agent”的现代 Harness 架构（Thin Agent, Fat Platform）、基于 Model Context Protocol (MCP) 的标准剪辑工具集、Shadow Timeline 虚拟沙箱与即时度量反馈闭环、以及动态 Sub-Agent 隔离调度规范。
 
