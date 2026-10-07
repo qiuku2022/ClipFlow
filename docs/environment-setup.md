@@ -43,8 +43,14 @@ uv sync
 # 或开发模式可编辑安装：uv pip install -e .
 ```
 
-> **GPU 加速运行依赖 (CUDA / cuDNN)**：  
-> 若需启用 GPU 极速转写（$\ge 12\times$ 实时倍速），Windows 主机须安装 **CUDA Toolkit 12.x** 与 **cuDNN 9.x for CUDA 12**，并确保 `cudnn64_*.dll` 和 `cublas64_*.dll` 所在目录加入系统 `PATH` 或置于 `resources/cuda_runtime/`；无 CUDA 环境时系统自动降级回退至多线程 CPU 模式。
+> **GPU 加速运行依赖说明 (可选，非强制)**：  
+> - **默认开发模式 (纯 CPU，零配置)**：开发、单元测试与日常调试无需安装任何 CUDA 或 cuDNN。无 GPU 环境时系统自动降级回退至多线程 CPU 模式（INT8，批大小 8），功能完全正常。  
+> - **GPU 极速加速推荐模式 (免装 Toolkit，推荐)**：主机具备 NVIDIA 独显（RTX 系列）与基础显卡驱动时，**无需下载数 GB 的系统级 CUDA Toolkit**，直接通过 `uv` 在虚拟环境中安装运行时动态库即可实现零污染加速：  
+>   ```powershell
+>   uv pip install nvidia-cublas-cu12 nvidia-cudnn-cu12
+>   ```  
+>   *注：Windows 平台运行入口通过 `os.add_dll_directory()` 自动将虚拟环境内的 `site-packages/nvidia/*/bin` 注册进 DLL 寻址链。*  
+> - **备用加速方式**：亦可将 `cublas64_12.dll` 与 `cudnn64_9.dll` 等动态库直接解压置于 `resources/cuda_runtime/` 目录；若系统已全局安装 CUDA Toolkit 12.4+ / cuDNN 9.x 则自动向下兼容识别。
 
 ### 2.3 [远期规划 - Milestone 4 阶段启用] 配置 HyperFrames 动效环境 (Node.js 24)
 > **阶段说明**：依据 `roadmap.md` 红线，v1.0 MVP (M0~M2) 周期内**严禁引入 npm 与外部动效包**。本步骤仅在进入 Milestone 4 动效包装研发阶段时按需执行。
