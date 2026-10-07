@@ -83,6 +83,9 @@ hf_cache/
 .env.local
 .env.*.local
 .local/
+*.db
+*.sqlite
+*.sqlite3
 
 # ------------------------------------------------------------------------------
 # 7. 操作系统产物 (Windows / macOS / Linux)
