@@ -1,0 +1,10 @@
+[package]
+name = "clipflow-app"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clipflow-common = { path = "../clipflow-common" }
+clipflow-ui = { path = "../clipflow-ui" }
+clipflow-ipc = { path = "../clipflow-ipc" }
+

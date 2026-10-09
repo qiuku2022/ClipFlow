@@ -1,0 +1,8 @@
+[package]
+name = "clipflow-timeline"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clipflow-common = { path = "../clipflow-common" }
+

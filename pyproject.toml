@@ -1,0 +1,19 @@
+[project]
+name = "clipflow-worker"
+version = "0.3.0"
+description = "ClipFlow intelligent worker for ASR, NLP and IPC."
+authors = [{ name = "ClipFlow Team" }]
+requires-python = ">=3.13"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.3",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.7.0"
+]
+
