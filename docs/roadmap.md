@@ -4,7 +4,7 @@
 > **更新时间**：2026-10-07  
 > **适用技术栈**：Rust 1.99, wgpu 30.0, egui 0.36, Python 3.13 (`uv`), FFmpeg 9.0.2, faster-whisper 1.2.1  
 > **状态索引**：`[ ]` 待开始 | `[/]` 进行中 | `[x]` 已完成并通过验收 | `[-]` 已废弃/跳过  
-> **当前活动里程碑**：**Milestone 0 (M0)**  
+> **当前活动里程碑**：**Milestone 1 (M1)**  
 > **核心地位**：指导 ClipFlow 全生命周期的任务分解、依赖时序、验收命令 (DoD) 与进度追踪的单一执行事实来源 (SSOT)。
 
 ---
@@ -54,7 +54,7 @@ flowchart TD
 - **总任务数**：6 个原子任务
 - **预估工期**：1 周
 
-- [ ] **M0-T01 双语言仓库根工程初始化**
+- [x] **M0-T01 双语言仓库根工程初始化**
   - **前置依赖**：无
   - **涉改模块**：根目录 `Cargo.toml`, `.cargo/config.toml`, `pyproject.toml`, `.python-version`
   - **对应规范**：[environment-setup.md](environment-setup.md) & [codebase-structure.md](codebase-structure.md)
@@ -65,7 +65,7 @@ flowchart TD
     uv run python --version # 必须输出 Python 3.13.x
     ```
 
-- [ ] **M0-T02 基础类型与时间数学库实现 (`clipflow-common`)**
+- [x] **M0-T02 基础类型与时间数学库实现 (`clipflow-common`)**
   - **前置依赖**：M0-T01
   - **涉改模块**：`crates/clipflow-common/`
   - **对应规范**：[timeline-data-model.md 第 1 节](timeline-data-model.md)
@@ -75,7 +75,7 @@ flowchart TD
     cargo test -p clipflow-common
     ```
 
-- [ ] **M0-T03 主窗口宿主与 Neutral Modern 深色视觉主题 (`clipflow-app` & `clipflow-ui`)**
+- [x] **M0-T03 主窗口宿主与 Neutral Modern 深色视觉主题 (`clipflow-app` & `clipflow-ui`)**
   - **前置依赖**：M0-T01, M0-T02
   - **涉改模块**：`crates/clipflow-app/`, `crates/clipflow-ui/`
   - **对应规范**：[ui-spec.md](ui-spec.md)
@@ -86,7 +86,7 @@ flowchart TD
     # 窗口正常弹出，呈现标准 Neutral Modern 深色主题，无闪烁
     ```
 
-- [ ] **M0-T04 剪辑工作台分屏容器骨架与导航路由 (`clipflow-ui`)**
+- [x] **M0-T04 剪辑工作台分屏容器骨架与导航路由 (`clipflow-ui`)**
   - **前置依赖**：M0-T03
   - **涉改模块**：`crates/clipflow-ui/`
   - **对应规范**：[ui-spec.md 第 5.2 节](ui-spec.md) & [prd.md 第 2 节](prd.md)
@@ -96,7 +96,7 @@ flowchart TD
     cargo test -p clipflow-ui --test edit_layout_scaffold
     ```
 
-- [ ] **M0-T05 Windows Job Object 内核级生命周期强绑定 (`clipflow-ipc`)**
+- [x] **M0-T05 Windows Job Object 内核级生命周期强绑定 (`clipflow-ipc`)**
   - **前置依赖**：M0-T01, M0-T02
   - **涉改模块**：`crates/clipflow-ipc/`
   - **对应规范**：[ipc-protocol.md 第 1 节](ipc-protocol.md) & [architecture.md 第 4.6 节](architecture.md)
@@ -106,7 +106,7 @@ flowchart TD
     cargo test -p clipflow-ipc --test job_guard_cleanup
     ```
 
-- [ ] **M0-T06 异步双工命名管道与 stderr 异步排空 (`clipflow-ipc`)**
+- [x] **M0-T06 异步双工命名管道与 stderr 异步排空 (`clipflow-ipc`)**
   - **前置依赖**：M0-T05
   - **涉改模块**：`crates/clipflow-ipc/`, `python/clipflow_worker/`
   - **对应规范**：[ipc-protocol.md 第 1~2 节](ipc-protocol.md) & [security-and-privacy.md 第 3 节](security-and-privacy.md)
@@ -325,3 +325,5 @@ flowchart TD
 - **核心待办**：
   - 声音工作流：多轨混音台、AI 降噪、TTS 语音合成与声音克隆
   - 图像工作流：AI 视频封面图智能提取、提示词生图与缩略图批量排版
+
+
