@@ -6,4 +6,4 @@ edition.workspace = true
 [dependencies]
 clipflow-common = { path = "../clipflow-common" }
 clipflow-timeline = { path = "../clipflow-timeline" }
-
+egui = { workspace = true }

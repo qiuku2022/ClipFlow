@@ -7,4 +7,5 @@ edition.workspace = true
 clipflow-common = { path = "../clipflow-common" }
 clipflow-ui = { path = "../clipflow-ui" }
 clipflow-ipc = { path = "../clipflow-ipc" }
-
+eframe = { workspace = true }
+egui = { workspace = true }
