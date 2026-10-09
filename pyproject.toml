@@ -17,3 +17,9 @@ dev = [
     "ruff>=0.7.0"
 ]
 
+
+[tool.pytest.ini_options]
+pythonpath = "python"
+
+[tool.hatch.build.targets.wheel]
+packages = ["python/clipflow_worker"]
