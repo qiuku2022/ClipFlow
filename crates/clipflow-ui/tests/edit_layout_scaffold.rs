@@ -11,7 +11,7 @@ fn test_workflow_page_navigation() {
     assert_eq!(dock.current_page(), WorkflowPage::Agent);
     
     // Test all 6 pages exist
-    let all_pages = vec![
+    let all_pages = [
         WorkflowPage::Agent,
         WorkflowPage::Edit,
         WorkflowPage::Motion,

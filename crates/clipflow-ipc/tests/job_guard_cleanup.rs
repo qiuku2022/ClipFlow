@@ -6,7 +6,7 @@ fn test_job_guard_cleanup() {
     let job = JobGuard::new().expect("Failed to create job object");
     
     let mut child = Command::new("ping")
-        .args(&["127.0.0.1", "-n", "30"])
+        .args(["127.0.0.1", "-n", "30"])
         .spawn()
         .expect("Failed to spawn child process");
         
